@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Official files were not modified
+        id: integrity
+        continue-on-error: true
+        run: |
+          if ! sha256sum -c .github/tests.sha256; then
+            echo "::warning::Official test files, scripts or the workflow were modified. Final grading uses the original versions."
+            exit 1
+          fi
+
+      - name: gofmt
+        id: gofmt
+        continue-on-error: true
+        run: |
+          files="$(git ls-files '*.go' | grep -v -e '^internal/app/stage' -e '^internal/app/helpers_test.go' -e '^internal/app/variants_test.go' || true)"
+          if [ -n "$files" ]; then
+            unformatted="$(gofmt -l $files)"
+            if [ -n "$unformatted" ]; then
+              echo "These files are not formatted, run gofmt -w:"
+              echo "$unformatted"
+              exit 1
+            fi
+          fi
+
+      - name: go vet
+        id: vet
+        continue-on-error: true
+        run: go vet ./...
+
+      - name: Tests
+        id: tests
+        continue-on-error: true
+        run: |
+          go test -list '^Test(Stage|Hidden)' ./internal/app/ > list.txt 2>/dev/null || true
+          go test -race -count=1 -timeout 180s -json ./... > test.json || exit 1
+
+      - name: Points
+        if: always()
+        run: |
+          python3 scripts/score.py --json test.json --list list.txt --no-hidden \
+            --gofmt "${{ steps.gofmt.outcome }}" --vet "${{ steps.vet.outcome }}" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Result
+        if: always()
+        run: |
+          if [ "${{ steps.tests.outcome }}" != "success" ] || [ "${{ steps.gofmt.outcome }}" != "success" ] || [ "${{ steps.vet.outcome }}" != "success" ]; then
+            echo "Some checks failed, see the Points step for details."
+            exit 1
+          fi

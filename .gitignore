@@ -1,0 +1,9 @@
+# binaries and test artifacts
+/api
+*.exe
+*.out
+test.json
+list.txt
+result.json
+.idea/
+.vscode/
