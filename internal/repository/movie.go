@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"errors"
 	"sort"
 	"sync"
@@ -9,13 +10,24 @@ import (
 )
 
 type MovieRepository interface {
-	Create(movie model.Movie) (model.Movie, error)
-	GetByID(id uint32) (model.Movie, bool)
-	Update(movie model.Movie) (model.Movie, bool)
-	Delete(id uint32) bool
-	Count(filter string) int
-	List(filter string, offset, limit int) []model.Movie
+	Create(ctx context.Context, movie model.Movie) (model.Movie, error)
+	GetByID(ctx context.Context, id uint32) (model.Movie, bool)
+	Update(ctx context.Context, movie model.Movie) (model.Movie, bool)
+	Delete(ctx context.Context, id uint32) bool
+	Count(ctx context.Context, filter string) int
+	List(ctx context.Context, filter string, offset, limit int) []model.Movie
 }
+
+// MovieRepositoryWithErrors preserves backend failures without changing the legacy result shapes.
+type MovieRepositoryWithErrors interface {
+	GetByIDWithError(ctx context.Context, id uint32) (model.Movie, error)
+	UpdateWithError(ctx context.Context, movie model.Movie) (model.Movie, error)
+	DeleteWithError(ctx context.Context, id uint32) error
+	CountWithError(ctx context.Context, filter string) (int, error)
+	ListWithError(ctx context.Context, filter string, offset, limit int) ([]model.Movie, error)
+}
+
+var ErrNotFound = errors.New("movie not found")
 
 type InMemoryMovieRepository struct {
 	mu     sync.RWMutex
@@ -25,8 +37,6 @@ type InMemoryMovieRepository struct {
 
 // ErrIDExhausted indicates that all uint32 movie IDs have been allocated.
 var ErrIDExhausted = errors.New("movie ID space exhausted")
-
-var _ MovieRepository = (*InMemoryMovieRepository)(nil)
 
 func NewInMemoryMovieRepository() *InMemoryMovieRepository {
 	return &InMemoryMovieRepository{items: make(map[uint32]model.Movie), nextID: 1}
@@ -112,6 +122,94 @@ func (repository *InMemoryMovieRepository) List(filter string, offset, limit int
 		result = append(result, cloneMovie(repository.items[id]))
 	}
 	return result
+}
+
+type inMemoryMovieRepositoryAdapter struct {
+	repository *InMemoryMovieRepository
+}
+
+var _ MovieRepository = (*inMemoryMovieRepositoryAdapter)(nil)
+var _ MovieRepositoryWithErrors = (*inMemoryMovieRepositoryAdapter)(nil)
+
+func NewInMemoryMovieRepositoryAdapter() MovieRepository {
+	return &inMemoryMovieRepositoryAdapter{repository: NewInMemoryMovieRepository()}
+}
+
+func (adapter *inMemoryMovieRepositoryAdapter) Create(ctx context.Context, movie model.Movie) (model.Movie, error) {
+	if err := ctx.Err(); err != nil {
+		return model.Movie{}, err
+	}
+	return adapter.repository.Create(movie)
+}
+
+func (adapter *inMemoryMovieRepositoryAdapter) GetByID(ctx context.Context, id uint32) (model.Movie, bool) {
+	movie, err := adapter.GetByIDWithError(ctx, id)
+	return movie, err == nil
+}
+
+func (adapter *inMemoryMovieRepositoryAdapter) GetByIDWithError(ctx context.Context, id uint32) (model.Movie, error) {
+	if err := ctx.Err(); err != nil {
+		return model.Movie{}, err
+	}
+	movie, ok := adapter.repository.GetByID(id)
+	if !ok {
+		return model.Movie{}, ErrNotFound
+	}
+	return movie, nil
+}
+
+func (adapter *inMemoryMovieRepositoryAdapter) Update(ctx context.Context, movie model.Movie) (model.Movie, bool) {
+	updated, err := adapter.UpdateWithError(ctx, movie)
+	return updated, err == nil
+}
+
+func (adapter *inMemoryMovieRepositoryAdapter) UpdateWithError(ctx context.Context, movie model.Movie) (model.Movie, error) {
+	if err := ctx.Err(); err != nil {
+		return model.Movie{}, err
+	}
+	updated, ok := adapter.repository.Update(movie)
+	if !ok {
+		return model.Movie{}, ErrNotFound
+	}
+	return updated, nil
+}
+
+func (adapter *inMemoryMovieRepositoryAdapter) Delete(ctx context.Context, id uint32) bool {
+	return adapter.DeleteWithError(ctx, id) == nil
+}
+
+func (adapter *inMemoryMovieRepositoryAdapter) DeleteWithError(ctx context.Context, id uint32) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !adapter.repository.Delete(id) {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (adapter *inMemoryMovieRepositoryAdapter) Count(ctx context.Context, filter string) int {
+	count, _ := adapter.CountWithError(ctx, filter)
+	return count
+}
+
+func (adapter *inMemoryMovieRepositoryAdapter) CountWithError(ctx context.Context, filter string) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	return adapter.repository.Count(filter), nil
+}
+
+func (adapter *inMemoryMovieRepositoryAdapter) List(ctx context.Context, filter string, offset, limit int) []model.Movie {
+	movies, _ := adapter.ListWithError(ctx, filter, offset, limit)
+	return movies
+}
+
+func (adapter *inMemoryMovieRepositoryAdapter) ListWithError(ctx context.Context, filter string, offset, limit int) ([]model.Movie, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return adapter.repository.List(filter, offset, limit), nil
 }
 
 func cloneMovie(movie model.Movie) model.Movie {
