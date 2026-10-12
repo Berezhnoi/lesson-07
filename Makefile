@@ -4,7 +4,7 @@ export
 .PHONY: db-up db-down db-logs migrate-up migrate-down migrate-create migrate-version migrate-force run test fmt vet
 
 db-up:
-	docker compose up -d --wait db
+	docker compose up -d
 
 db-down:
 	docker compose down

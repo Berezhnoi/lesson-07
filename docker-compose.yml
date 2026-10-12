@@ -19,6 +19,20 @@ services:
       retries: 10
       start_period: 10s
 
+  pgadmin:
+    image: dpage/pgadmin4
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?PGADMIN_DEFAULT_EMAIL is required}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?PGADMIN_DEFAULT_PASSWORD is required}
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
   migrate:
     image: migrate/migrate:v4.18.3
     profiles: ["tools"]
@@ -32,3 +46,4 @@ services:
 
 volumes:
   postgres_data:
+  pgadmin_data:

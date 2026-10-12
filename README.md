@@ -171,6 +171,12 @@ internal/middleware/         логування, відновлення післ
 `/swagger/index.html`, специфікація — `/swagger/doc.json`.
 Swagger 2 застосовує базовий шлях `/api/v1` до health-операції, тому сервер також має `/api/v1/health`; контрактний
 `/health` залишається доступним без префікса.
+
+Щоб запустити PostgreSQL і pgAdmin, скопіюйте `.env.example` у `.env`, задайте локальні паролі та виконайте
+`docker compose up -d`. pgAdmin доступний за адресою `http://localhost:5050`; увійдіть із
+`PGADMIN_DEFAULT_EMAIL` і `PGADMIN_DEFAULT_PASSWORD` із `.env`. Додайте сервер із host `db`, port `5432`,
+database `DB_NAME`, username `DB_USER` і password `DB_PASSWORD`. Це ім'я хоста працює всередині мережі Compose.
+
 Щоб перегенерувати Swagger-документацію після зміни анотацій, виконайте:
 
 ```sh
