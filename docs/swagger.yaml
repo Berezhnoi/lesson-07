@@ -189,7 +189,6 @@ paths:
       description: Deletes one movie and returns an empty response.
       parameters:
       - description: Movie ID
-        format: int64
         in: path
         maximum: 4294967295
         minimum: 0
@@ -222,7 +221,6 @@ paths:
       description: Returns one movie by its uint32 ID.
       parameters:
       - description: Movie ID
-        format: int64
         in: path
         maximum: 4294967295
         minimum: 0
@@ -258,7 +256,6 @@ paths:
         optional fields become null.
       parameters:
       - description: Movie ID
-        format: int64
         in: path
         maximum: 4294967295
         minimum: 0

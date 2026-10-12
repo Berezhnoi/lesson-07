@@ -182,9 +182,10 @@ database `DB_NAME`, username `DB_USER` і password `DB_PASSWORD`. Це ім'я �
 Щоб перегенерувати Swagger-документацію після зміни анотацій, виконайте:
 
 ```sh
-go install github.com/swaggo/swag/cmd/swag@latest
-$(go env GOPATH)/bin/swag init -g cmd/api/main.go
+make swagger
 ```
+
+Ціль запускає версію `swag`, уже закріплену в `go.mod`, і оновлює файли в `docs/`.
 
 Запустіть усі тести разом із перевіркою гонок командою `go test -race ./...`. Інтеграційні тести репозиторію
 пропускаються, якщо `TEST_DATABASE_URL` не задано; перед підключенням вони перевіряють суфікс `_test`.
@@ -227,3 +228,134 @@ $(go env GOPATH)/bin/swag init -g cmd/api/main.go
 6. CORS є зовнішнім middleware, щоб заголовок був і на помилках, сформованих recovery middleware.
 7. Клієнт отримує загальне повідомлення про внутрішню помилку, тоді як деталі паніки та stack trace залишаються в журналі.
 8. Swagger-специфікація генерується з анотацій handler-ів; тестовий `app.NewRouter()` не монтує UI, сервер використовує окремий `NewRouterWithSwagger()`.
+
+## Project setup and database notes
+
+### Prerequisites
+
+- Go 1.21 or newer.
+- Docker Engine and Docker Compose v2 (`docker compose`).
+- `make`; `curl` is useful for the optional HTTP smoke test.
+
+### Quick start
+
+```sh
+cp .env.example .env
+# Edit .env and replace both placeholder passwords with local secrets.
+make db-up
+make migrate-up
+make run
+```
+
+The server listens on `http://localhost:${APP_PORT}` (default `8080`). Swagger UI is at
+`http://localhost:8080/swagger/index.html`; its OpenAPI JSON is at `/swagger/doc.json`.
+`make run` points the host process at `127.0.0.1` and uses `DB_PORT`; Compose containers use `db:5432`.
+
+### Environment variables
+
+| Variable | Purpose |
+|---|---|
+| `DB_HOST` | PostgreSQL hostname. The host-run `make run` target overrides this to `127.0.0.1`; containers use `db`. |
+| `DB_PORT` | Host port mapped to PostgreSQL's container port `5432`; also used by the host-run app. |
+| `DB_USER` | PostgreSQL application username; Compose passes it to `POSTGRES_USER`. |
+| `DB_PASSWORD` | PostgreSQL application password; Compose passes it to `POSTGRES_PASSWORD`. |
+| `DB_NAME` | Development database name; Compose passes it to `POSTGRES_DB`. |
+| `DB_SSLMODE` | PostgreSQL TLS mode used to build the app DSN (local default: `disable`). |
+| `DATABASE_URL` | Migration CLI URL; it must use Compose hostname `db` and port `5432`. |
+| `TEST_DB_NAME` | Separate integration database; must differ from `DB_NAME` and end in `_test`. |
+| `TEST_DATABASE_URL` | Integration-test URL from the host; use `127.0.0.1`, `DB_PORT`, and the `_test` database. |
+| `TEST_DATABASE_DOCKER_URL` | URL used by the Compose migration container to migrate the `_test` database via `db:5432`. |
+| `PGADMIN_DEFAULT_EMAIL` | pgAdmin web login email. |
+| `PGADMIN_DEFAULT_PASSWORD` | pgAdmin web login password. |
+| `APP_PORT` | HTTP server port (default `8080`). |
+| `ALLOWED_ORIGIN` | CORS `Access-Control-Allow-Origin` value (default `*`). |
+| `LOG_SQL` | Set to `true` to enable GORM Info-level SQL logging; otherwise GORM logs warnings and errors. |
+| `DB_MAX_OPEN_CONNS` | Maximum open database connections (default `25`). |
+| `DB_MAX_IDLE_CONNS` | Maximum idle connections retained in the pool (default `25`). |
+| `DB_CONN_MAX_LIFETIME` | Maximum age of a pooled connection (default `30m`). |
+| `DB_CONN_MAX_IDLE_TIME` | Maximum idle time before a pooled connection is closed (default `5m`). |
+
+`.env` is listed in `.gitignore`; keep real passwords and connection URLs with credentials local and never commit
+them. `.env.example` contains placeholders only. For pgAdmin, open `http://localhost:5050`, log in with its
+configured email/password, then register PostgreSQL with host `db`, port `5432`, and `DB_NAME`, `DB_USER`, and
+`DB_PASSWORD`.
+
+### Database migrations
+
+[golang-migrate](https://github.com/golang-migrate/migrate) applies versioned SQL changes; the Make targets
+run its official Docker image, so the CLI need not be installed locally. Files use the format
+`NNNNNN_name.up.sql` and `NNNNNN_name.down.sql` under `migrations/`. Create a pair with:
+
+```sh
+make migrate-create name=add_movie_field
+make migrate-up
+make migrate-down       # Revert one migration.
+make migrate-version
+```
+
+`make migrate-force version=N` changes only the migration version recorded by the tool; it does not run SQL.
+Use it only after inspecting the database and correcting a dirty/partially applied migration state, and force
+the version that accurately represents the schema. Never edit a migration already applied to a shared or
+persisted database; add a new migration instead.
+
+### Normalized schema
+
+```text
+genres (1) ────────────< (N) movies (N) >──────────── (M) directors
+                                  │                         │
+                                  └── movie_directors ──────┘
+```
+
+`movies.genre_id` references `genres.id` with `ON DELETE RESTRICT`: a genre cannot be removed while movies
+use it. `movie_directors.movie_id` uses `ON DELETE CASCADE`, because a link has no meaning after its movie is
+deleted. `movie_directors.director_id` uses `ON DELETE RESTRICT`, so a director cannot be removed while linked.
+The join table has a composite primary key `(movie_id, director_id)`; its leading `movie_id` also indexes that
+foreign key. Separate indexes cover `movies.genre_id` and `movie_directors.director_id`.
+
+### Architecture and API compatibility
+
+`MovieRepository` is the storage boundary. The in-memory adapter backs `app.NewRouter()`, which creates a
+fresh store per call so contract tests and CI need no database. `app.NewRouterWithRepository()` accepts a
+repository; `cmd/api` supplies the GORM/PostgreSQL repository after loading config and pinging the database.
+GORM never runs `AutoMigrate`; the SQL migrations own the schema. Repository mapping turns normalized
+`genres.name` and the movie's director association back into the existing API's plain `genre` and `director`
+strings, so the HTTP JSON contract remains unchanged.
+
+The pool defaults (25 open and 25 idle connections) support ordinary request concurrency without an
+unbounded number of PostgreSQL connections. The 30-minute maximum lifetime and 5-minute idle lifetime
+recycle old or unused connections without reconnecting on every request; tune them to deployment capacity.
+
+### N+1 queries and tests
+
+An N+1 problem occurs when a list query is followed by separate relationship queries for each returned row.
+The measured naive pattern required `1 + 2N` queries: 41 for 20 movies (and 201 for 100). The repository's
+page fetch uses a genre join plus two director preload queries: **3 total** for page sizes 1, 20, and 100.
+The complete HTTP list operation also runs a separate count query, so it is 4 queries overall. An integration
+regression test counts GORM query callbacks for the repository page fetch and fails if the count grows with page size.
+
+Run unit/contract tests without a database using:
+
+```sh
+go test -race -count=1 ./...
+```
+
+The integration test `internal/repository/movie_gorm_test.go` skips with `TEST_DATABASE_URL not set`. To
+create/migrate the isolated `movies_test` database and run the repository integration tests, set
+`TEST_DATABASE_URL` and `TEST_DATABASE_DOCKER_URL` in `.env`, then run:
+
+```sh
+make test-integration
+```
+
+The test refuses a database name that does not end in `_test` or matches `DB_NAME`; each subtest truncates
+tables with `RESTART IDENTITY CASCADE`, and the suite cleans up its rows afterward.
+
+### Additional design decisions
+
+- SQL migrations, not GORM model inference, are the source of truth for production schema changes.
+- `NewRouter()` stays database-independent so course contract tests remain deterministic and fast.
+- Repository mappings keep persistence relationships out of HTTP handlers and preserve the legacy JSON shape.
+- PostgreSQL unique constraints plus `ON CONFLICT DO NOTHING` safely reuse genre/director rows during concurrent creates.
+- Explicit UTC microsecond timestamps keep API output precision stable across database operations.
+- Query-count assertions use GORM callbacks, making the N+1 guard independent of logger formatting.
+- Integration tests require a separate `_test` database to prevent accidental truncation of development data.

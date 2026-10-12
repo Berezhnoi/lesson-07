@@ -1,7 +1,7 @@
 include .env
 export
 
-.PHONY: db-up db-down db-logs migrate-up migrate-down migrate-create migrate-version migrate-force run test test-db test-integration fmt vet
+.PHONY: db-up db-down db-logs migrate-up migrate-down migrate-create migrate-version migrate-force run test test-db test-integration swagger fmt vet
 
 db-up:
 	docker compose up -d
@@ -44,6 +44,9 @@ test-db:
 
 test-integration: test-db
 	@go test -race ./internal/repository -run '^TestGormRepositoryIntegration$$' -v
+
+swagger:
+	go run github.com/swaggo/swag/cmd/swag@v1.16.4 init -g main.go -d cmd/api,internal/handler,internal/model
 
 fmt:
 	gofmt -w $$(find . -name '*.go' -not -path './.git/*')
