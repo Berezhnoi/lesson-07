@@ -204,13 +204,13 @@ func (repository *gormMovieRepository) ListWithError(ctx context.Context, filter
 	entities := make([]model.MovieEntity, 0)
 	query := repository.db.WithContext(ctx).
 		Model(&model.MovieEntity{}).
-		Preload("Genre").
+		Joins("Genre").
 		Preload("Directors", func(db *gorm.DB) *gorm.DB { return db.Order("directors.id ASC") }).
 		Order("movies.id ASC").
 		Offset(offset).
 		Limit(limit)
 	if filter != "" {
-		query = query.Joins("JOIN genres ON genres.id = movies.genre_id").Where("genres.name = ?", filter)
+		query = query.Where(`"Genre"."name" = ?`, filter)
 	}
 	if err := query.Find(&entities).Error; err != nil {
 		return nil, wrapDatabaseError("list movies", err)

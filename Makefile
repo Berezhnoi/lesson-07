@@ -1,7 +1,7 @@
 include .env
 export
 
-.PHONY: db-up db-down db-logs migrate-up migrate-down migrate-create migrate-version migrate-force run test fmt vet
+.PHONY: db-up db-down db-logs migrate-up migrate-down migrate-create migrate-version migrate-force run test test-db test-integration fmt vet
 
 db-up:
 	docker compose up -d
@@ -34,6 +34,16 @@ run:
 
 test:
 	go test ./...
+
+test-db:
+	@case "$$TEST_DB_NAME" in *_test) ;; *) echo "TEST_DB_NAME must end in _test" >&2; exit 1;; esac
+	@test "$$TEST_DB_NAME" != "$$DB_NAME" || (echo "TEST_DB_NAME must differ from DB_NAME" >&2; exit 1)
+	@docker compose up -d --wait db
+	@docker compose exec -T db sh -c 'if psql -U "$$POSTGRES_USER" -d postgres -lqt | cut -d "|" -f 1 | grep -qw "$$TEST_DB_NAME"; then echo "Test database exists"; else createdb -U "$$POSTGRES_USER" "$$TEST_DB_NAME"; fi'
+	@docker compose run --rm migrate -path=/migrations -database "$$TEST_DATABASE_DOCKER_URL" up
+
+test-integration: test-db
+	@go test -race ./internal/repository -run '^TestGormRepositoryIntegration$$' -v
 
 fmt:
 	gofmt -w $$(find . -name '*.go' -not -path './.git/*')
