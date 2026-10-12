@@ -26,6 +26,36 @@ type MovieInput struct {
 	Synopsis    *string `json:"synopsis"`
 }
 
+type Genre struct {
+	ID   uint64 `gorm:"primaryKey"`
+	Name string `gorm:"uniqueIndex:uq_genres_name;not null"`
+}
+
+func (Genre) TableName() string { return "genres" }
+
+type Director struct {
+	ID       uint64 `gorm:"primaryKey"`
+	FullName string `gorm:"column:full_name;uniqueIndex:uq_directors_full_name;not null"`
+	Bio      *string
+}
+
+func (Director) TableName() string { return "directors" }
+
+type MovieEntity struct {
+	ID          uint64 `gorm:"primaryKey"`
+	Title       string `gorm:"not null"`
+	Country     string `gorm:"not null"`
+	ReleaseYear *int   `gorm:"column:release_year"`
+	Synopsis    *string
+	GenreID     uint64     `gorm:"not null"`
+	Genre       Genre      `gorm:"foreignKey:GenreID"`
+	Directors   []Director `gorm:"many2many:movie_directors;foreignKey:ID;joinForeignKey:MovieID;references:ID;joinReferences:DirectorID"`
+	CreatedAt   time.Time  `gorm:"autoCreateTime:false"`
+	UpdatedAt   time.Time  `gorm:"autoUpdateTime:false"`
+}
+
+func (MovieEntity) TableName() string { return "movies" }
+
 func (movie Movie) MarshalJSON() ([]byte, error) {
 	type movieResponse struct {
 		ID          uint32  `json:"id"`

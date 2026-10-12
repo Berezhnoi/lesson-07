@@ -30,7 +30,7 @@ migrate-force:
 	@docker compose run --rm migrate -path=/migrations -database "$$DATABASE_URL" force "$(version)"
 
 run:
-	go run ./cmd/api
+	DB_HOST=127.0.0.1 go run ./cmd/api
 
 test:
 	go test ./...

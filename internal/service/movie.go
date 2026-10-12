@@ -2,8 +2,10 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"strconv"
@@ -100,13 +102,13 @@ func ValidateMovieJSON(body []byte) (model.MovieInput, error) {
 	return input, nil
 }
 
-func (service *MovieService) Create(body []byte) (model.Movie, error) {
+func (service *MovieService) Create(ctx context.Context, body []byte) (model.Movie, error) {
 	input, err := ValidateMovieJSON(body)
 	if err != nil {
 		return model.Movie{}, err
 	}
 	now := time.Now().UTC().Truncate(time.Microsecond)
-	return service.repository.Create(model.Movie{
+	movie, err := service.repository.Create(ctx, model.Movie{
 		Title:       input.Title,
 		Director:    input.Director,
 		Country:     input.Country,
@@ -116,20 +118,27 @@ func (service *MovieService) Create(body []byte) (model.Movie, error) {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	})
+	return movie, repositoryError(err)
 }
 
-func (service *MovieService) GetByID(id uint32) (model.Movie, bool) {
-	return service.repository.GetByID(id)
+func (service *MovieService) GetByID(ctx context.Context, id uint32) (model.Movie, bool) {
+	movie, err := service.GetByIDWithError(ctx, id)
+	return movie, err == nil
 }
 
-func (service *MovieService) Replace(id uint32, body []byte) (model.Movie, error) {
+func (service *MovieService) GetByIDWithError(ctx context.Context, id uint32) (model.Movie, error) {
+	movie, err := repositoryGetByID(ctx, service.repository, id)
+	return movie, repositoryError(err)
+}
+
+func (service *MovieService) Replace(ctx context.Context, id uint32, body []byte) (model.Movie, error) {
 	input, err := ValidateMovieJSON(body)
 	if err != nil {
 		return model.Movie{}, err
 	}
-	current, ok := service.repository.GetByID(id)
-	if !ok {
-		return model.Movie{}, NotFoundError{Message: "Movie not found"}
+	current, err := repositoryGetByID(ctx, service.repository, id)
+	if err != nil {
+		return model.Movie{}, repositoryError(err)
 	}
 	current.Title = input.Title
 	current.Director = input.Director
@@ -147,32 +156,89 @@ func (service *MovieService) Replace(id uint32, body []byte) (model.Movie, error
 		now = latestTimestamp.Add(time.Microsecond)
 	}
 	current.UpdatedAt = now
-	updated, ok := service.repository.Update(current)
-	if !ok {
-		return model.Movie{}, NotFoundError{Message: "Movie not found"}
+	updated, err := repositoryUpdate(ctx, service.repository, current)
+	if err != nil {
+		return model.Movie{}, repositoryError(err)
 	}
 	return updated, nil
 }
 
-func (service *MovieService) Delete(id uint32) error {
-	if !service.repository.Delete(id) {
-		return NotFoundError{Message: "Movie not found"}
-	}
-	return nil
+func (service *MovieService) Delete(ctx context.Context, id uint32) error {
+	return repositoryError(repositoryDelete(ctx, service.repository, id))
 }
 
-func (service *MovieService) ListPage(filter, pageValue, limitValue string, hasPage, hasLimit bool) ([]model.Movie, error) {
+func (service *MovieService) ListPage(ctx context.Context, filter, pageValue, limitValue string, hasPage, hasLimit bool) ([]model.Movie, error) {
 	page, limit, err := parsePaginationValues(pageValue, limitValue, hasPage, hasLimit)
 	if err != nil {
 		return nil, err
 	}
 
-	total := service.repository.Count(filter)
+	total, err := repositoryCount(ctx, service.repository, filter)
+	if err != nil {
+		return nil, repositoryError(err)
+	}
 	offset, empty := paginationOffset(page, limit, total)
 	if empty {
 		return make([]model.Movie, 0), nil
 	}
-	return service.repository.List(filter, offset, limit), nil
+	movies, err := repositoryList(ctx, service.repository, filter, offset, limit)
+	return movies, repositoryError(err)
+}
+
+func repositoryGetByID(ctx context.Context, movieRepository repository.MovieRepository, id uint32) (model.Movie, error) {
+	if withErrors, ok := movieRepository.(repository.MovieRepositoryWithErrors); ok {
+		return withErrors.GetByIDWithError(ctx, id)
+	}
+	movie, found := movieRepository.GetByID(ctx, id)
+	if !found {
+		return model.Movie{}, repository.ErrNotFound
+	}
+	return movie, nil
+}
+
+func repositoryUpdate(ctx context.Context, movieRepository repository.MovieRepository, movie model.Movie) (model.Movie, error) {
+	if withErrors, ok := movieRepository.(repository.MovieRepositoryWithErrors); ok {
+		return withErrors.UpdateWithError(ctx, movie)
+	}
+	updated, found := movieRepository.Update(ctx, movie)
+	if !found {
+		return model.Movie{}, repository.ErrNotFound
+	}
+	return updated, nil
+}
+
+func repositoryDelete(ctx context.Context, movieRepository repository.MovieRepository, id uint32) error {
+	if withErrors, ok := movieRepository.(repository.MovieRepositoryWithErrors); ok {
+		return withErrors.DeleteWithError(ctx, id)
+	}
+	if !movieRepository.Delete(ctx, id) {
+		return repository.ErrNotFound
+	}
+	return nil
+}
+
+func repositoryCount(ctx context.Context, movieRepository repository.MovieRepository, filter string) (int, error) {
+	if withErrors, ok := movieRepository.(repository.MovieRepositoryWithErrors); ok {
+		return withErrors.CountWithError(ctx, filter)
+	}
+	return movieRepository.Count(ctx, filter), nil
+}
+
+func repositoryList(ctx context.Context, movieRepository repository.MovieRepository, filter string, offset, limit int) ([]model.Movie, error) {
+	if withErrors, ok := movieRepository.(repository.MovieRepositoryWithErrors); ok {
+		return withErrors.ListWithError(ctx, filter, offset, limit)
+	}
+	return movieRepository.List(ctx, filter, offset, limit), nil
+}
+
+func repositoryError(err error) error {
+	if errors.Is(err, repository.ErrNotFound) {
+		return NotFoundError{Message: "Movie not found"}
+	}
+	if err != nil {
+		return fmt.Errorf("movie repository: %w", err)
+	}
+	return nil
 }
 
 func parsePaginationValues(pageValue, limitValue string, hasPage, hasLimit bool) (uint64, int, error) {

@@ -44,7 +44,7 @@ func (handler *MovieHandler) RegisterRoutes(routes *gin.RouterGroup) {
 func (handler *MovieHandler) list(c *gin.Context) {
 	page, hasPage := c.GetQuery("page")
 	limit, hasLimit := c.GetQuery("limit")
-	movies, err := handler.service.ListPage(c.Query("genre"), page, limit, hasPage, hasLimit)
+	movies, err := handler.service.ListPage(c.Request.Context(), c.Query("genre"), page, limit, hasPage, hasLimit)
 	if err != nil {
 		apperr.WriteError(c, err)
 		return
@@ -69,7 +69,7 @@ func (handler *MovieHandler) create(c *gin.Context) {
 		apperr.WriteError(c, service.ValidationError{Message: "Request body could not be read"})
 		return
 	}
-	movie, err := handler.service.Create(body)
+	movie, err := handler.service.Create(c.Request.Context(), body)
 	if err != nil {
 		apperr.WriteError(c, err)
 		return
@@ -96,9 +96,9 @@ func (handler *MovieHandler) getByID(c *gin.Context) {
 		return
 	}
 
-	movie, ok := handler.service.GetByID(uint32(id))
-	if !ok {
-		apperr.WriteError(c, service.NotFoundError{Message: "Movie not found"})
+	movie, err := handler.service.GetByIDWithError(c.Request.Context(), uint32(id))
+	if err != nil {
+		apperr.WriteError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, movie)
@@ -129,7 +129,7 @@ func (handler *MovieHandler) replace(c *gin.Context) {
 		apperr.WriteError(c, service.ValidationError{Message: "Request body could not be read"})
 		return
 	}
-	movie, err := handler.service.Replace(uint32(id), body)
+	movie, err := handler.service.Replace(c.Request.Context(), uint32(id), body)
 	if err != nil {
 		apperr.WriteError(c, err)
 		return
@@ -155,7 +155,7 @@ func (handler *MovieHandler) delete(c *gin.Context) {
 		apperr.WriteError(c, err)
 		return
 	}
-	if err := handler.service.Delete(uint32(id)); err != nil {
+	if err := handler.service.Delete(c.Request.Context(), uint32(id)); err != nil {
 		apperr.WriteError(c, err)
 		return
 	}

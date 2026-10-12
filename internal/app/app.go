@@ -21,16 +21,20 @@ import (
 
 // NewRouter creates a router and a fresh in-memory repository for each call.
 func NewRouter() http.Handler {
-	return newRouter(false)
+	return newRouter(repository.NewInMemoryMovieRepositoryAdapter(), false)
 }
 
 // NewRouterWithSwagger enables the documentation UI for the executable server.
 // Contract tests should continue to use NewRouter.
 func NewRouterWithSwagger() http.Handler {
-	return newRouter(true)
+	return newRouter(repository.NewInMemoryMovieRepositoryAdapter(), true)
 }
 
-func newRouter(enableSwagger bool) http.Handler {
+func NewRouterWithRepository(movieRepository repository.MovieRepository) http.Handler {
+	return newRouter(movieRepository, true)
+}
+
+func newRouter(movieRepository repository.MovieRepository, enableSwagger bool) http.Handler {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	// CORS must wrap recovery so panic responses also receive CORS headers.
@@ -39,7 +43,7 @@ func newRouter(enableSwagger bool) http.Handler {
 	router.RedirectTrailingSlash = false
 	router.RedirectFixedPath = false
 
-	movieService := service.NewMovieService(repository.NewInMemoryMovieRepository())
+	movieService := service.NewMovieService(movieRepository)
 	movieHandler := handler.NewMovieHandler(movieService)
 
 	router.GET("/health", handler.Health)
