@@ -3,6 +3,10 @@
 .env
 *.exe
 *.out
+*.log
+*.bin
+*.test
+/main
 test.json
 list.txt
 result.json
