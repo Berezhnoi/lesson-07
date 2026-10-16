@@ -52,6 +52,12 @@ type UserResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type TokenResponse struct {
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+	ExpiresIn   int64  `json:"expires_in"`
+}
+
 func (user User) ToResponse() UserResponse {
 	return UserResponse{
 		ID:        user.ID,
