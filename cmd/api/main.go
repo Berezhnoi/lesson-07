@@ -44,7 +44,8 @@ func run() error {
 		logLevel = gormlogger.Info
 	}
 	db, err := gorm.Open(postgres.Open(cfg.PostgresDSN()), &gorm.Config{
-		Logger: gormlogger.Default.LogMode(logLevel),
+		Logger:         gormlogger.Default.LogMode(logLevel),
+		TranslateError: true,
 	})
 	if err != nil {
 		return fmt.Errorf("open PostgreSQL connection: %w", err)

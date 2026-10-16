@@ -3,53 +3,17 @@ package repository
 import (
 	"context"
 	"fmt"
-	"net/url"
-	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 
 	"homework/internal/model"
 )
 
 func TestGormRepositoryIntegration(t *testing.T) {
-	databaseURL := os.Getenv("TEST_DATABASE_URL")
-	if databaseURL == "" {
-		t.Skip("TEST_DATABASE_URL not set")
-	}
-	parsedURL, err := url.Parse(databaseURL)
-	if err != nil {
-		t.Fatalf("parse TEST_DATABASE_URL: %v", err)
-	}
-	databaseName := strings.TrimPrefix(parsedURL.Path, "/")
-	if !strings.HasSuffix(databaseName, "_test") {
-		t.Fatalf("refusing integration tests: TEST_DATABASE_URL database %q must end in _test", databaseName)
-	}
-	if configuredName := os.Getenv("TEST_DB_NAME"); configuredName != "" && databaseName != configuredName {
-		t.Fatalf("refusing integration tests: TEST_DATABASE_URL database %q differs from TEST_DB_NAME %q", databaseName, configuredName)
-	}
-	if databaseName == os.Getenv("DB_NAME") {
-		t.Fatalf("refusing integration tests: TEST_DATABASE_URL must not use DB_NAME")
-	}
-
-	db, err := gorm.Open(postgres.Open(databaseURL), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
-	if err != nil {
-		t.Fatalf("open TEST_DATABASE_URL: %v", err)
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		t.Fatalf("get test database connection: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := sqlDB.Close(); err != nil {
-			t.Errorf("close test database: %v", err)
-		}
-	})
+	db := openIntegrationDB(t)
 
 	counter := &queryCounter{}
 	if err := db.Callback().Query().After("gorm:query").Register("integration:count_queries", func(*gorm.DB) {
