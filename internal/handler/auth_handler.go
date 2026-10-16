@@ -28,6 +28,17 @@ func NewAuthHandler(authService AuthService) *AuthHandler {
 	return &AuthHandler{service: authService}
 }
 
+// Register godoc
+// @Summary Register a user
+// @Description Creates a viewer account. Role cannot be set by the client.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param credentials body model.RegisterRequest true "Registration payload"
+// @Success 201 {object} model.UserResponse
+// @Failure 422 {object} model.ErrorResponse
+// @Failure 500 {object} model.ErrorResponse
+// @Router /auth/register [post]
 func (handler *AuthHandler) Register(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -47,6 +58,18 @@ func (handler *AuthHandler) Register(c *gin.Context) {
 	c.JSON(http.StatusCreated, user)
 }
 
+// Login godoc
+// @Summary Log in
+// @Description Returns a Bearer access token for a valid email and password.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param credentials body model.LoginRequest true "Login payload"
+// @Success 200 {object} model.TokenResponse
+// @Failure 401 {object} model.ErrorResponse
+// @Failure 422 {object} model.ErrorResponse
+// @Failure 500 {object} model.ErrorResponse
+// @Router /auth/login [post]
 func (handler *AuthHandler) Login(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {

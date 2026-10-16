@@ -64,6 +64,22 @@ func (repository *gormUserRepository) FindByEmail(ctx context.Context, email str
 	return normalizeUserTimestamps(user), nil
 }
 
+func (repository *gormUserRepository) Count(ctx context.Context) (int, error) {
+	var total int64
+	if err := repository.db.WithContext(ctx).Model(&model.User{}).Count(&total).Error; err != nil {
+		return 0, fmt.Errorf("count users: %w", err)
+	}
+	return int(total), nil
+}
+
+func (repository *gormUserRepository) CountByRole(ctx context.Context, role string) (int, error) {
+	var total int64
+	if err := repository.db.WithContext(ctx).Model(&model.User{}).Where("role = ?", role).Count(&total).Error; err != nil {
+		return 0, fmt.Errorf("count users by role: %w", err)
+	}
+	return int(total), nil
+}
+
 func (repository *gormUserRepository) List(ctx context.Context, offset, limit int) ([]model.User, error) {
 	if offset < 0 || limit < 0 {
 		return nil, errors.New("user list offset and limit must not be negative")

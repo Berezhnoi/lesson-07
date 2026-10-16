@@ -48,5 +48,5 @@ func WriteError(c *gin.Context, err error) {
 	if apiError.Status == http.StatusUnauthorized {
 		c.Header("WWW-Authenticate", "Bearer")
 	}
-	c.JSON(apiError.Status, gin.H{"error": Error{Code: apiError.Code, Message: apiError.Message}})
+	c.AbortWithStatusJSON(apiError.Status, gin.H{"error": Error{Code: apiError.Code, Message: apiError.Message}})
 }

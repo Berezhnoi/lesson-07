@@ -70,6 +70,33 @@ func (service *AuthService) Register(ctx context.Context, request model.Register
 	return user.ToResponse(), nil
 }
 
+func (service *AuthService) EnsureAdmin(ctx context.Context, email, password string) (bool, error) {
+	normalized := normalizeAuthEmail(email)
+	_, err := service.users.FindByEmail(ctx, normalized)
+	if err == nil {
+		return false, nil
+	}
+	if !errors.Is(err, repository.ErrNotFound) {
+		return false, fmt.Errorf("find admin by email: %w", err)
+	}
+	created, err := service.Register(ctx, model.RegisterRequest{
+		Email:    email,
+		Password: password,
+		Name:     "Admin",
+	})
+	if err != nil {
+		var validationError ValidationError
+		if errors.As(err, &validationError) && validationError.Message == "email already registered" {
+			return false, nil
+		}
+		return false, err
+	}
+	if _, err := service.users.UpdateRole(ctx, created.ID, model.RoleAdmin); err != nil {
+		return false, fmt.Errorf("promote seeded admin: %w", err)
+	}
+	return true, nil
+}
+
 func (service *AuthService) Login(ctx context.Context, request model.LoginRequest) (model.TokenResponse, error) {
 	email := normalizeAuthEmail(request.Email)
 	user, err := service.users.FindByEmail(ctx, email)

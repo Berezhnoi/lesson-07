@@ -19,15 +19,6 @@ func NewMovieHandler(movieService *service.MovieService) *MovieHandler {
 	return &MovieHandler{service: movieService}
 }
 
-func (handler *MovieHandler) RegisterRoutes(routes *gin.RouterGroup) {
-	routes.POST("", handler.create)
-	routes.GET("", handler.list)
-	routes.GET("/", handler.getByID)
-	routes.GET("/:id", handler.getByID)
-	routes.PUT("/:id", handler.replace)
-	routes.DELETE("/:id", handler.delete)
-}
-
 // list godoc
 // @Summary List movies
 // @Description Returns movies ordered by ascending ID. Filtering is applied before pagination; limits above 100 are capped.
@@ -59,7 +50,10 @@ func (handler *MovieHandler) list(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param movie body model.MovieRequest true "Movie to create"
+// @Security BearerAuth
 // @Success 201 {object} model.MovieResponse
+// @Failure 401 {object} model.ErrorResponse
+// @Failure 403 {object} model.ErrorResponse
 // @Failure 422 {object} model.ErrorResponse
 // @Failure 500 {object} model.ErrorResponse
 // @Router /movies [post]
@@ -112,8 +106,11 @@ func (handler *MovieHandler) getByID(c *gin.Context) {
 // @Produce json
 // @Param id path int64 true "Movie ID" minimum(0) maximum(4294967295)
 // @Param movie body model.MovieRequest true "Replacement movie"
+// @Security BearerAuth
 // @Success 200 {object} model.MovieResponse
 // @Failure 400 {object} model.ErrorResponse
+// @Failure 401 {object} model.ErrorResponse
+// @Failure 403 {object} model.ErrorResponse
 // @Failure 404 {object} model.ErrorResponse
 // @Failure 422 {object} model.ErrorResponse
 // @Failure 500 {object} model.ErrorResponse
@@ -144,8 +141,11 @@ func (handler *MovieHandler) replace(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int64 true "Movie ID" minimum(0) maximum(4294967295)
+// @Security BearerAuth
 // @Success 204 "No Content"
 // @Failure 400 {object} model.ErrorResponse
+// @Failure 401 {object} model.ErrorResponse
+// @Failure 403 {object} model.ErrorResponse
 // @Failure 404 {object} model.ErrorResponse
 // @Failure 500 {object} model.ErrorResponse
 // @Router /movies/{id} [delete]

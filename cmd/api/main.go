@@ -18,6 +18,7 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 
 	"homework/internal/app"
+	"homework/internal/auth"
 	"homework/internal/config"
 	"homework/internal/repository"
 )
@@ -26,6 +27,10 @@ import (
 // @version 1.0
 // @description REST API for creating, listing, replacing, and deleting movies.
 // @BasePath /api/v1
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and the JWT. Example: "Bearer <token>".
 func main() {
 	if err := run(); err != nil {
 		log.Printf("movie API stopped: %v", err)
@@ -72,9 +77,19 @@ func run() error {
 		return fmt.Errorf("connect to PostgreSQL: %w", err)
 	}
 
+	tokens, err := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTTTL)
+	if err != nil {
+		return fmt.Errorf("JWT_SECRET is invalid: %w", err)
+	}
+
 	server := &http.Server{
-		Addr:              ":" + strconv.Itoa(cfg.AppPort),
-		Handler:           app.NewRouterWithRepository(repository.NewGormMovieRepository(db)),
+		Addr: ":" + strconv.Itoa(cfg.AppPort),
+		Handler: app.NewRouterWithDeps(app.Deps{
+			Movies:        repository.NewGormMovieRepository(db),
+			Users:         repository.NewGormUserRepository(db),
+			Tokens:        tokens,
+			EnableSwagger: true,
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

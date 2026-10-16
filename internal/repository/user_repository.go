@@ -16,6 +16,8 @@ type UserRepository interface {
 	FindByID(ctx context.Context, id uint64) (model.User, error)
 	FindByEmail(ctx context.Context, email string) (model.User, error)
 	List(ctx context.Context, offset, limit int) ([]model.User, error)
+	Count(ctx context.Context) (int, error)
+	CountByRole(ctx context.Context, role string) (int, error)
 	UpdateRole(ctx context.Context, id uint64, role string) (model.User, error)
 }
 
@@ -99,6 +101,30 @@ func (repository *InMemoryUserRepository) FindByEmail(ctx context.Context, email
 		}
 	}
 	return model.User{}, ErrNotFound
+}
+
+func (repository *InMemoryUserRepository) Count(ctx context.Context) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	repository.mu.RLock()
+	defer repository.mu.RUnlock()
+	return len(repository.items), nil
+}
+
+func (repository *InMemoryUserRepository) CountByRole(ctx context.Context, role string) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	repository.mu.RLock()
+	defer repository.mu.RUnlock()
+	count := 0
+	for _, user := range repository.items {
+		if user.Role == role {
+			count++
+		}
+	}
+	return count, nil
 }
 
 func (repository *InMemoryUserRepository) List(ctx context.Context, offset, limit int) ([]model.User, error) {
