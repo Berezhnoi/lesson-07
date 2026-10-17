@@ -1,0 +1,38 @@
+Task 2.1: Authentication module (bcrypt + JWT)
+
+Implement:
+1. internal/auth/password.go: HashPassword(plain string) (string, error) using bcrypt.GenerateFromPassword with bcrypt.DefaultCost, and CheckPassword(hash, plain string) error using bcrypt.CompareHashAndPassword. Reject passwords longer than 72 bytes before hashing (return a typed validation error).
+2. internal/auth/jwt.go: a TokenManager built from the secret and TTL (constructor refuses an empty or short secret). Issue(user) returns a signed token with jwt.SigningMethodHS256 and claims user_id, role, iat and exp (now + TTL, 24h by default). Parse(token) returns the claims and uses jwt.NewParser(jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired()). It must reject: alg none, other algorithms, wrong secret, tampered payload, expired token, missing exp, missing user_id, role not in the allowed set. The secret comes only from the config (which reads os.Getenv("JWT_SECRET")); no hardcoded fallback anywhere.
+3. internal/service/auth_service.go (depends on UserRepository and TokenManager, built from interfaces):
+   - Register(ctx, RegisterRequest): validate (email via net/mail, exact address only, trimmed and lowercased, max 254; name non-empty after TrimSpace, max 100; password 8-72 bytes), hash, role ALWAYS viewer (ignore anything a client sends), create. Duplicate email returns a validation error "email already registered" (mapped to 422 validation_error). Rely on the unique index error, not on check-then-insert.
+   - Login(ctx, LoginRequest): find by lowercased email; if the user does not exist, still run bcrypt.CompareHashAndPassword against a package-level dummy hash (generated once at startup with the same cost) so timing is similar; unknown email and wrong password return the SAME error value, which the handler maps to 401 code "unauthorized" message "invalid credentials". Success returns {access_token, token_type: "Bearer", expires_in: seconds}.
+4. internal/handler/auth_handler.go: Register -> 201 + UserResponse; Login -> 200 + token JSON. Decode bodies strictly in the same style as the movie handlers (valid JSON object, wrong types -> 422 validation_error; unknown fields ignored, so a "role" field in the register body does nothing). Handlers stay thin. Never log request bodies or tokens.
+5. Extend the single error-mapping function with ErrUnauthorized (401, "unauthorized") and ErrForbidden (403, "forbidden"). Keep generic messages.
+6. Unit tests (table-driven): password hash differs between calls and verifies, wrong password fails; JWT round trip, expired, wrong secret, tampered, alg none, missing exp, invalid role; service tests with the in-memory repository: register ok (role viewer even if "role":"admin" is sent), duplicate email in a different case, short or too long password, invalid email, login ok, login wrong password and unknown email return the identical error and the identical HTTP body.
+Do not register routes in this step.
+
+Task 2.2: AuthMiddleware and RequireRole
+
+Implement:
+1. internal/middleware/auth.go: AuthMiddleware(tokens *auth.TokenManager) gin.HandlerFunc.
+   - Read the Authorization header; accept exactly "Bearer <token>" (scheme case-insensitive, one space, non-empty token). Missing header, other scheme or empty token -> 401.
+   - Validate signature and exp through tokens.Parse. Any failure -> 401 with the same generic message ("authentication required" for a missing header, "invalid or expired token" for everything else; never say which check failed) and the header WWW-Authenticate: Bearer.
+   - On success: c.Set("user_id", claims.UserID), c.Set("role", claims.Role), then c.Next().
+   - Every failure path calls c.AbortWithStatusJSON (never c.JSON followed by return) so the handler chain stops. Use the shared error JSON writer.
+   - Export small typed helpers to read the context safely (UserIDFrom(c) (uint, bool), RoleFrom(c) (string, bool)) using comma-ok type assertions, never a bare type assertion that could panic.
+2. internal/middleware/rbac.go: RequireRole(allowed ...string) gin.HandlerFunc.
+   - No role in the context (AuthMiddleware did not run or failed) -> 401 abort. Role present but not in the allowed set -> 403 abort ("forbidden"). Otherwise c.Next().
+   - Fail closed: if allowed is empty, deny everyone with 403.
+3. Route registration (internal/app): add NewRouterWithDeps(deps Deps) http.Handler, where Deps holds the MovieRepository, UserRepository, TokenManager (and what else the router needs). Refactor route registration into one function that receives the groups, so the legacy NewRouter() (unprotected, in-memory) uses the SAME handlers with all groups pointing at one unprotected group, and the secure router uses the real groups. Global middleware order stays CORS, Recovery, Logging. Real groups use NESTED Gin groups so Auth runs first and RBAC second:
+     api := r.Group("/api/v1")
+     public    := api.Group("")
+     protected := api.Group("", middleware.AuthMiddleware(tokens))
+     staff     := protected.Group("", middleware.RequireRole("editor", "admin"))
+     admin     := protected.Group("", middleware.RequireRole("admin"))
+   Routes: public: POST /auth/register, POST /auth/login, GET /movies, GET /movies/:id. protected: GET /me. staff: POST /movies, PUT /movies/:id. admin: DELETE /movies/:id, GET /users, PUT /users/:id/role. /health stays public and outside /api/v1. OPTIONS preflight must keep working without a token (CORS is global and answers first; verify). Auth runs BEFORE id/body validation, so an anonymous PUT /movies/abc is 401, a viewer's is 403.
+4. Handlers: internal/handler/user_handler.go: GET /me (reads user_id from the context, loads the user, returns UserResponse; if the user no longer exists return 401), GET /users (same pagination rules as movies: page/limit validation, invalid_pagination, cap 100, overflow safe; ordered by id; returns a JSON array of UserResponse, [] when empty), PUT /users/:id/role (shared id parsing -> 400 invalid_id; body {"role": ...} must be a string in {viewer, editor, admin} else 422; unknown user 404 "User not found"; an admin may not demote the last remaining admin: return 422 validation_error with a clear message; response 200 + UserResponse). Responses use UserResponse only, never the entity.
+5. cmd/api/main.go: build the GORM user repository and TokenManager from config; fail fast with a clear message if JWT_SECRET is invalid; call NewRouterWithDeps.
+6. cmd/seed/main.go + Makefile target seed-admin: reads ADMIN_EMAIL and ADMIN_PASSWORD via config, creates an admin user (same validation and hashing as register) if no user with that email exists, otherwise does nothing (idempotent). Never prints the password. Add the two variables to .env.example as placeholders.
+7. Swagger: add a BearerAuth security definition (@securityDefinitions.apikey BearerAuth, in: header, name: Authorization, with the "Bearer <token>" hint), @Security BearerAuth plus @Failure 401/403 on every protected route, document the auth endpoints, regenerate docs with swag init.
+8. Manual check against the real DB (make db-up migrate-up seed-admin run): register a user (check role is viewer and no password_hash in the JSON), login, GET /me with and without a token, POST /movies as viewer (403), promote the user to editor via the seeded admin (PUT /users/:id/role), log in again and POST /movies (201), DELETE as editor (403) and as admin (204), expired or garbage token (401). Show a compact table of the results.
+9. Verify the old tests still pass without a token and without a database (go test -race -count=1 ./...).

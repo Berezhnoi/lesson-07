@@ -33,6 +33,11 @@ type ErrorResponse struct {
 	Error ErrorDetail `json:"error"`
 }
 
+// RegistrationResponse intentionally contains no account details.
+type RegistrationResponse struct {
+	Message string `json:"message" example:"If registration can proceed, it has been accepted"`
+}
+
 // ErrorDetail contains a stable error code and human-readable message.
 type ErrorDetail struct {
 	Code    string `json:"code" example:"validation_error"`

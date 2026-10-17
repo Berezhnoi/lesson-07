@@ -24,6 +24,10 @@ type Config struct {
 	DBMaxIdleConns    int
 	DBConnMaxLifetime time.Duration
 	DBConnMaxIdleTime time.Duration
+	JWTSecret         string
+	JWTTTL            time.Duration
+	AdminEmail        string
+	AdminPassword     string
 }
 
 func Load() (Config, error) {
@@ -65,9 +69,23 @@ func Load() (Config, error) {
 	if cfg.DBConnMaxIdleTime, err = durationValue("DB_CONN_MAX_IDLE_TIME", 5*time.Minute); err != nil {
 		return Config{}, err
 	}
+	if cfg.JWTSecret, err = required("JWT_SECRET"); err != nil {
+		return Config{}, err
+	}
+	if len(cfg.JWTSecret) < 32 {
+		return Config{}, fmt.Errorf("JWT_SECRET must be at least 32 bytes")
+	}
+	if cfg.JWTTTL, err = durationValue("JWT_TTL", 24*time.Hour); err != nil {
+		return Config{}, err
+	}
+	if cfg.JWTTTL <= 0 {
+		return Config{}, fmt.Errorf("JWT_TTL must be greater than zero")
+	}
 
 	cfg.DBSSLMode = stringValue("DB_SSLMODE", "disable")
 	cfg.AllowedOrigin = stringValue("ALLOWED_ORIGIN", "*")
+	cfg.AdminEmail = stringValue("ADMIN_EMAIL", "")
+	cfg.AdminPassword = stringValue("ADMIN_PASSWORD", "")
 	return cfg, nil
 }
 

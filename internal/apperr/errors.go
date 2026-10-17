@@ -29,6 +29,10 @@ func WriteError(c *gin.Context, err error) {
 	var invalidPaginationError service.InvalidPaginationError
 	var apiError HTTPError
 	switch {
+	case errors.Is(err, service.ErrUnauthorized):
+		apiError = HTTPError{Status: http.StatusUnauthorized, Code: "unauthorized", Message: "invalid credentials"}
+	case errors.Is(err, service.ErrForbidden):
+		apiError = HTTPError{Status: http.StatusForbidden, Code: "forbidden", Message: "Forbidden"}
 	case errors.As(err, &validationError):
 		apiError = HTTPError{Status: http.StatusUnprocessableEntity, Code: "validation_error", Message: validationError.Message}
 	case errors.As(err, &notFoundError):
@@ -41,5 +45,8 @@ func WriteError(c *gin.Context, err error) {
 	default:
 		apiError = HTTPError{Status: http.StatusInternalServerError, Code: "internal_server_error", Message: "Internal server error"}
 	}
-	c.JSON(apiError.Status, gin.H{"error": Error{Code: apiError.Code, Message: apiError.Message}})
+	if apiError.Status == http.StatusUnauthorized {
+		c.Header("WWW-Authenticate", "Bearer")
+	}
+	c.AbortWithStatusJSON(apiError.Status, gin.H{"error": Error{Code: apiError.Code, Message: apiError.Message}})
 }

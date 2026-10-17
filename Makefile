@@ -1,7 +1,7 @@
 include .env
 export
 
-.PHONY: db-up db-down db-logs migrate-up migrate-down migrate-create migrate-version migrate-force run test test-db test-integration swagger fmt vet
+.PHONY: db-up db-down db-logs migrate-up migrate-down migrate-create migrate-version migrate-force run seed-admin test test-db test-integration swagger fmt vet
 
 db-up:
 	docker compose up -d
@@ -32,6 +32,9 @@ migrate-force:
 run:
 	DB_HOST=127.0.0.1 go run ./cmd/api
 
+seed-admin:
+	DB_HOST=127.0.0.1 go run ./cmd/seed
+
 test:
 	go test ./...
 
@@ -43,7 +46,7 @@ test-db:
 	@docker compose run --rm migrate -path=/migrations -database "$$TEST_DATABASE_DOCKER_URL" up
 
 test-integration: test-db
-	@go test -race ./internal/repository -run '^TestGormRepositoryIntegration$$' -v
+	@go test -race ./internal/repository -run '^(TestGormRepositoryIntegration|TestGormUserRepositoryIntegration)$$' -v
 
 swagger:
 	go run github.com/swaggo/swag/cmd/swag@v1.16.4 init -g main.go -d cmd/api,internal/handler,internal/model
