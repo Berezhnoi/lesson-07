@@ -4,23 +4,30 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"runtime/debug"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
+
+const maxRequestBodySize = 1 << 20
 
 func RequestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		startedAt := time.Now()
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				// Recovery is outside this middleware; log the eventual status and re-panic to it.
-				log.Printf("%s %s %d %s", c.Request.Method, c.Request.URL.Path, http.StatusInternalServerError, time.Since(startedAt))
+				writeRequestLog(c, http.StatusInternalServerError, time.Since(startedAt))
 				panic(recovered)
 			}
-			log.Printf("%s %s %d %s", c.Request.Method, c.Request.URL.Path, c.Writer.Status(), time.Since(startedAt))
+			writeRequestLog(c, c.Writer.Status(), time.Since(startedAt))
 		}()
+		c.Next()
+	}
+}
+
+func RequestBodyLimit() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestBodySize)
 		c.Next()
 	}
 }
@@ -29,7 +36,6 @@ func Recovery() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				log.Printf("request panic: %v\n%s", recovered, debug.Stack())
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 					"error": gin.H{
 						"code":    "internal_server_error",
@@ -55,9 +61,13 @@ func CORS() gin.HandlerFunc {
 			c.Header("Access-Control-Allow-Headers", "Content-Type,Authorization")
 			c.AbortWithStatus(http.StatusNoContent)
 			// The preflight short-circuit does not reach the inner request logger.
-			log.Printf("%s %s %d %s", c.Request.Method, c.Request.URL.Path, http.StatusNoContent, time.Since(startedAt))
+			writeRequestLog(c, http.StatusNoContent, time.Since(startedAt))
 			return
 		}
 		c.Next()
 	}
+}
+
+func writeRequestLog(c *gin.Context, status int, duration time.Duration) {
+	log.New(log.Writer(), "", 0).Printf("%s %s %d %s", c.Request.Method, c.Request.URL.Path, status, duration)
 }

@@ -69,7 +69,7 @@ const docTemplate = `{
         },
         "/auth/register": {
             "post": {
-                "description": "Creates a viewer account. Role cannot be set by the client.",
+                "description": "Creates a viewer account; the role cannot be set by the client. Responses do not disclose whether the email was already registered.",
                 "consumes": [
                     "application/json"
                 ],
@@ -92,10 +92,10 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "201": {
-                        "description": "Created",
+                    "202": {
+                        "description": "Accepted",
                         "schema": {
-                            "$ref": "#/definitions/model.UserResponse"
+                            "$ref": "#/definitions/model.RegistrationResponse"
                         }
                     },
                     "422": {
@@ -818,6 +818,14 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "role": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.RegistrationResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
                     "type": "string"
                 }
             }

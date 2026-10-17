@@ -127,6 +127,11 @@ definitions:
       role:
         type: string
     type: object
+  model.RegistrationResponse:
+    properties:
+      message:
+        type: string
+    type: object
 info:
   contact: {}
   description: REST API for creating, listing, replacing, and deleting movies.
@@ -171,7 +176,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates a viewer account. Role cannot be set by the client.
+      description: Creates a viewer account; the role cannot be set by the client. Responses do not disclose whether the email was already registered.
       parameters:
       - description: Registration payload
         in: body
@@ -182,10 +187,10 @@ paths:
       produces:
       - application/json
       responses:
-        "201":
-          description: Created
+        "202":
+          description: Accepted
           schema:
-            $ref: '#/definitions/model.UserResponse'
+            $ref: '#/definitions/model.RegistrationResponse'
         "422":
           description: Unprocessable Entity
           schema:

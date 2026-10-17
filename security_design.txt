@@ -19,7 +19,7 @@ without the required role. Resource validation/not-found errors can still apply.
 
 | Endpoint | Anonymous | Viewer | Editor | Admin |
 |---|---:|---:|---:|---:|
-| POST /api/v1/auth/register | 201 | 201 | 201 | 201 |
+| POST /api/v1/auth/register | 202 | 202 | 202 | 202 |
 | POST /api/v1/auth/login | 200 | 200 | 200 | 200 |
 | GET /api/v1/movies | 200 | 200 | 200 | 200 |
 | GET /api/v1/movies/:id | 200 | 200 | 200 | 200 |
@@ -89,7 +89,8 @@ without the required role. Resource validation/not-found errors can still apply.
 - Brute force / credential stuffing: bcrypt and generic login errors now;
   per-IP/account rate limits and lockout policy tracked for later.
 - User enumeration: same login error and dummy-hash comparison now; monitor
-  registration abuse without exposing whether an email already exists.
+  registration abuse without exposing whether an email already exists. The
+  register endpoint returns the same 202 response for new and existing emails.
 - Token theft/replay: short-lived signed bearer tokens now; require HTTPS in
   deployment, and consider refresh/revocation controls later.
 - Stale role after downgrade: role in JWT remains effective until expiry;
@@ -99,7 +100,9 @@ without the required role. Resource validation/not-found errors can still apply.
 - SQL injection: use GORM parameterized queries and avoid building SQL from
   user strings; review any future raw SQL.
 - Oversized request bodies: enforce a small request-body limit before parsing;
-  reject over-limit bodies rather than buffering them without bound.
+  reject over-limit bodies rather than buffering them without bound. Requests
+  are capped at 1 MiB with `http.MaxBytesReader`.
+- Panic handling: return a generic 500 response and log no panic details.
 - Weak or leaked signing secret: startup requires JWT_SECRET of at least 32
   bytes; keep it outside source control and logs, rotate through deployment.
 - CORS abuse: configure an explicit trusted origin in production and do not

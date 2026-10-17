@@ -132,6 +132,23 @@ func TestAuthServiceLogin(t *testing.T) {
 	}
 }
 
+func TestAuthServiceUnknownEmailPerformsDummyHashComparison(t *testing.T) {
+	authService := newTestAuthService(t)
+	startedAt := time.Now()
+	_, err := authService.Login(context.Background(), model.LoginRequest{
+		Email:    "missing@example.com",
+		Password: "wrong password",
+	})
+	elapsed := time.Since(startedAt)
+
+	if err != service.ErrUnauthorized {
+		t.Fatalf("Login() error = %v, want ErrUnauthorized", err)
+	}
+	if elapsed < 10*time.Millisecond {
+		t.Fatalf("unknown-email login completed in %s, expected dummy bcrypt comparison", elapsed)
+	}
+}
+
 func newTestAuthService(t *testing.T) *service.AuthService {
 	t.Helper()
 	tokenManager, err := auth.NewTokenManager(testServiceSecret, 24*time.Hour)

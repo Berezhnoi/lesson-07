@@ -73,7 +73,7 @@ func newRouter(deps Deps) http.Handler {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	// CORS must wrap recovery so panic responses also receive CORS headers.
-	router.Use(middleware.CORS(), middleware.Recovery(), middleware.RequestLogger())
+	router.Use(middleware.CORS(), middleware.Recovery(), middleware.RequestLogger(), middleware.RequestBodyLimit())
 	router.HandleMethodNotAllowed = true
 	router.RedirectTrailingSlash = false
 	router.RedirectFixedPath = false

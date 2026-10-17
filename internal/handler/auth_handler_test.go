@@ -3,9 +3,9 @@ package handler
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -20,23 +20,25 @@ import (
 
 const handlerTestSecret = "handler-test-secret-with-at-least-32-bytes"
 
-func TestAuthHandlerRegisterIgnoresUnknownRole(t *testing.T) {
+func TestAuthHandlerRegisterReturnsGenericAcceptance(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	authService := newHandlerAuthService(t)
 	handler := NewAuthHandler(authService)
-	response := performAuthRequest(handler.Register, `{"email":"reader@example.com","password":"correct horse","name":"Reader","role":"admin"}`)
-	if response.Code != http.StatusCreated {
+	body := `{"email":"reader@example.com","password":"correct horse","name":"Reader","role":"admin"}`
+	response := performAuthRequest(handler.Register, body)
+	if response.Code != http.StatusAccepted {
 		t.Fatalf("Register() status = %d, body = %s", response.Code, response.Body.String())
 	}
-	var user model.UserResponse
-	if err := json.Unmarshal(response.Body.Bytes(), &user); err != nil {
-		t.Fatalf("decode registration response: %v", err)
+	duplicate := performAuthRequest(handler.Register, body)
+	if duplicate.Code != response.Code || duplicate.Body.String() != response.Body.String() {
+		t.Fatalf("new and duplicate registration responses differ: (%d, %q) vs (%d, %q)",
+			response.Code, response.Body.String(), duplicate.Code, duplicate.Body.String())
 	}
-	if user.Role != model.RoleViewer {
-		t.Fatalf("registered role = %q, want viewer", user.Role)
+	if strings.Contains(response.Body.String(), "password") || strings.Contains(response.Body.String(), "reader@example.com") {
+		t.Fatalf("registration response exposes credentials or account details: %s", response.Body.String())
 	}
-	if strings.Contains(response.Body.String(), "password") {
-		t.Fatalf("registration response exposes password field: %s", response.Body.String())
+	if got, want := response.Body.String(), `{"message":"If registration can proceed, it has been accepted"}`; got != want {
+		t.Fatalf("Register() body = %q, want %q", got, want)
 	}
 }
 
@@ -57,6 +59,9 @@ func TestAuthHandlerLoginFailuresHaveIdenticalResponses(t *testing.T) {
 	if wrongPassword.Body.String() != unknownEmail.Body.String() {
 		t.Fatalf("login error bodies differ: %q vs %q", wrongPassword.Body.String(), unknownEmail.Body.String())
 	}
+	if !reflect.DeepEqual(wrongPassword.Header(), unknownEmail.Header()) {
+		t.Fatalf("login error headers differ: %#v vs %#v", wrongPassword.Header(), unknownEmail.Header())
+	}
 	if wrongPassword.Header().Get("WWW-Authenticate") != "Bearer" {
 		t.Fatalf("WWW-Authenticate = %q, want Bearer", wrongPassword.Header().Get("WWW-Authenticate"))
 	}
@@ -72,6 +77,15 @@ func TestAuthHandlerRejectsInvalidJSONAndFieldTypes(t *testing.T) {
 		response := performAuthRequest(handler.Register, body)
 		if response.Code != http.StatusUnprocessableEntity {
 			t.Errorf("Register(%q) status = %d, want 422", body, response.Code)
+		}
+	}
+	for _, body := range []string{`[]`, `{"email":7,"password":"wrong password"}`, `{"email":"reader@example.com"`} {
+		response := performAuthRequest(handler.Login, body)
+		if response.Code != http.StatusUnprocessableEntity {
+			t.Errorf("Login(%q) status = %d, want 422", body, response.Code)
+		}
+		if strings.Contains(response.Body.String(), "internal") {
+			t.Errorf("Login(%q) leaked an internal error: %s", body, response.Body)
 		}
 	}
 }

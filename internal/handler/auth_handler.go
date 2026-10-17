@@ -30,12 +30,12 @@ func NewAuthHandler(authService AuthService) *AuthHandler {
 
 // Register godoc
 // @Summary Register a user
-// @Description Creates a viewer account. Role cannot be set by the client.
+// @Description Creates a viewer account; the role cannot be set by the client. Responses do not disclose whether the email was already registered.
 // @Tags auth
 // @Accept json
 // @Produce json
 // @Param credentials body model.RegisterRequest true "Registration payload"
-// @Success 201 {object} model.UserResponse
+// @Success 202 {object} model.RegistrationResponse
 // @Failure 422 {object} model.ErrorResponse
 // @Failure 500 {object} model.ErrorResponse
 // @Router /auth/register [post]
@@ -50,12 +50,23 @@ func (handler *AuthHandler) Register(c *gin.Context) {
 		apperr.WriteError(c, err)
 		return
 	}
-	user, err := handler.service.Register(c.Request.Context(), request)
+	_, err = handler.service.Register(c.Request.Context(), request)
 	if err != nil {
+		var validationError service.ValidationError
+		if errors.As(err, &validationError) && validationError.Message == "email already registered" {
+			writeRegistrationAccepted(c)
+			return
+		}
 		apperr.WriteError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, user)
+	writeRegistrationAccepted(c)
+}
+
+func writeRegistrationAccepted(c *gin.Context) {
+	c.JSON(http.StatusAccepted, model.RegistrationResponse{
+		Message: "If registration can proceed, it has been accepted",
+	})
 }
 
 // Login godoc
