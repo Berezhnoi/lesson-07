@@ -359,3 +359,97 @@ tables with `RESTART IDENTITY CASCADE`, and the suite cleans up its rows afterwa
 - Explicit UTC microsecond timestamps keep API output precision stable across database operations.
 - Query-count assertions use GORM callbacks, making the N+1 guard independent of logger formatting.
 - Integration tests require a separate `_test` database to prevent accidental truncation of development data.
+
+## Security
+
+### Roles and access
+
+New public registrations always receive the `viewer` role. An operator provisions the first admin with
+`make seed-admin`; clients cannot choose a role during registration. Editors can create and replace movies,
+while only admins can delete movies or manage user roles.
+
+| Endpoint | Anonymous | Viewer | Editor | Admin |
+|---|---:|---:|---:|---:|
+| `GET /api/v1/movies` | 200 | 200 | 200 | 200 |
+| `GET /api/v1/movies/{id}` | 200 | 200 | 200 | 200 |
+| `GET /api/v1/me` | 401 | 200 | 200 | 200 |
+| `POST /api/v1/movies` | 401 | 403 | 201 | 201 |
+| `PUT /api/v1/movies/{id}` | 401 | 403 | 200 | 200 |
+| `DELETE /api/v1/movies/{id}` | 401 | 403 | 403 | 204 |
+| `GET /api/v1/users` | 401 | 403 | 403 | 200 |
+| `PUT /api/v1/users/{id}/role` | 401 | 403 | 403 | 200 |
+
+### Authentication flow
+
+Register a viewer account (successful registration returns `201`; invalid or duplicate input returns `422`):
+
+```sh
+curl -i http://localhost:8080/api/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"reader@example.com","password":"use-a-long-local-password","name":"Reader"}'
+```
+
+Log in and use the returned access token on a protected endpoint:
+
+```sh
+LOGIN_RESPONSE=$(curl -s http://localhost:8080/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"reader@example.com","password":"use-a-long-local-password"}')
+TOKEN=$(printf '%s' "$LOGIN_RESPONSE" | jq -r '.access_token')
+curl -i http://localhost:8080/api/v1/me \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+The API signs JWT access tokens with HS256. Claims include `user_id`, `role`, `iat`, and `exp`. The default
+`JWT_TTL` is 24 hours; after expiration, a protected request returns `401 unauthorized` and the user must log
+in again. An authenticated user without the required role receives `403 forbidden`.
+
+### Security configuration and database setup
+
+Set `JWT_SECRET` to a private value of at least 32 bytes; generate a suitable random value with
+`openssl rand -base64 48`. Never commit it or print it in logs. `JWT_TTL` accepts a Go duration such as `24h`
+(default `24h`). `ADMIN_EMAIL` and `ADMIN_PASSWORD` provide the credentials for the first-admin seed command;
+set a strong local password before running it.
+
+With PostgreSQL running and `.env` configured, apply migrations and provision the first admin:
+
+```sh
+make migrate-up
+make seed-admin
+```
+
+Migration `000003_add_auth_fields.up.sql` creates the users table and case-insensitive email uniqueness index;
+`000003_add_auth_fields.down.sql` drops them. `make migrate-down` rolls back one migration, so when version
+000003 is the current version it applies the 000003 down migration.
+
+### Security design decisions
+
+- Registration assigns `viewer` server-side so public callers cannot self-promote.
+- Passwords use bcrypt, and the `PasswordHash` field is excluded from JSON responses.
+- Login failures share a generic unauthorized response and compare unknown-user passwords against a dummy hash.
+- JWTs use HS256 and require an expiration claim to bound the lifetime of stolen tokens.
+- Authentication middleware runs before role checks so anonymous malformed requests receive `401`, not validation details.
+- User role changes apply to newly issued tokens; existing tokens retain their signed role until expiration.
+- The first admin is provisioned by an operator rather than through public registration.
+
+### Course deliverables checklist
+
+| Item | Where | OK |
+|---|---|---|
+| Migration 000003 up/down | `migrations/000003_add_auth_fields.{up,down}.sql` | Yes |
+| bcrypt registration and JSON-hidden `PasswordHash` | `internal/auth/password.go`, `internal/model/user.go` | Yes |
+| Generic login failures; JWT expiration and secret configuration | `internal/service/auth_service.go`, `internal/auth/jwt.go`, `internal/config/config.go` | Yes |
+| `main.go`/app public, protected, staff, admin groups; authentication before `RequireRole` | `cmd/api/main.go`, `internal/app/app.go` | Yes |
+| Task 2.1 and 2.2 prompts | `prompts_lesson_9.txt` | Yes |
+| At least five security findings with triage | `security_audit.md` | Yes |
+| Integration coverage for 401/403 and role access matrix | `internal/app/auth_test.go`, `internal/app/rbac_test.go` | Yes |
+
+Run the database-independent Go tests, including the race detector, with:
+
+```sh
+go test -race -count=1 ./...
+```
+
+Duplicate registration returns `422 validation_error`, which can reveal whether an email is already registered;
+login failures remain generic. Other known limitations and triage for residual risks are recorded in
+[security_audit.md](./security_audit.md).
