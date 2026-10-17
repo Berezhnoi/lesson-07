@@ -40,8 +40,8 @@ func TestRequestLoggingRedactsCredentialsAndBodies(t *testing.T) {
 	registerRequest.Header.Set("Content-Type", "application/json")
 	registerResponse := httptest.NewRecorder()
 	router.ServeHTTP(registerResponse, registerRequest)
-	if registerResponse.Code != http.StatusAccepted {
-		t.Fatalf("register status = %d, want 202: %s", registerResponse.Code, registerResponse.Body)
+	if registerResponse.Code != http.StatusCreated {
+		t.Fatalf("register status = %d, want 201: %s", registerResponse.Code, registerResponse.Body)
 	}
 
 	token, err := tokens.Issue(model.User{ID: 1, Role: model.RoleViewer})
@@ -71,7 +71,7 @@ func TestRequestLoggingRedactsCredentialsAndBodies(t *testing.T) {
 		t.Fatalf("logged %d lines, want one per request: %q", len(lines), logOutput)
 	}
 	for index, expected := range [][]string{
-		{"POST", "/api/v1/auth/register", "202"},
+		{"POST", "/api/v1/auth/register", "201"},
 		{"GET", "/api/v1/me", "200"},
 	} {
 		fields := strings.Fields(lines[index])

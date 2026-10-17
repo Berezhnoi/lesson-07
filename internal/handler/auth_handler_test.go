@@ -20,25 +20,27 @@ import (
 
 const handlerTestSecret = "handler-test-secret-with-at-least-32-bytes"
 
-func TestAuthHandlerRegisterReturnsGenericAcceptance(t *testing.T) {
+func TestAuthHandlerRegisterCreatesUserAndRejectsDuplicates(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	authService := newHandlerAuthService(t)
 	handler := NewAuthHandler(authService)
 	body := `{"email":"reader@example.com","password":"correct horse","name":"Reader","role":"admin"}`
 	response := performAuthRequest(handler.Register, body)
-	if response.Code != http.StatusAccepted {
+	if response.Code != http.StatusCreated {
 		t.Fatalf("Register() status = %d, body = %s", response.Code, response.Body.String())
 	}
+	if strings.Contains(response.Body.String(), "password") {
+		t.Fatalf("Register() response exposes credentials: %s", response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"role":"viewer"`) {
+		t.Fatalf("Register() did not assign viewer role: %s", response.Body.String())
+	}
 	duplicate := performAuthRequest(handler.Register, body)
-	if duplicate.Code != response.Code || duplicate.Body.String() != response.Body.String() {
-		t.Fatalf("new and duplicate registration responses differ: (%d, %q) vs (%d, %q)",
-			response.Code, response.Body.String(), duplicate.Code, duplicate.Body.String())
+	if duplicate.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("duplicate Register() status = %d, body = %s", duplicate.Code, duplicate.Body.String())
 	}
-	if strings.Contains(response.Body.String(), "password") || strings.Contains(response.Body.String(), "reader@example.com") {
-		t.Fatalf("registration response exposes credentials or account details: %s", response.Body.String())
-	}
-	if got, want := response.Body.String(), `{"message":"If registration can proceed, it has been accepted"}`; got != want {
-		t.Fatalf("Register() body = %q, want %q", got, want)
+	if !strings.Contains(duplicate.Body.String(), `"code":"validation_error"`) {
+		t.Fatalf("duplicate Register() body lacks validation_error: %s", duplicate.Body.String())
 	}
 }
 

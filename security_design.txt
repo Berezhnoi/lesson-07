@@ -19,7 +19,7 @@ without the required role. Resource validation/not-found errors can still apply.
 
 | Endpoint | Anonymous | Viewer | Editor | Admin |
 |---|---:|---:|---:|---:|
-| POST /api/v1/auth/register | 202 | 202 | 202 | 202 |
+| POST /api/v1/auth/register | 201 | 201 | 201 | 201 |
 | POST /api/v1/auth/login | 200 | 200 | 200 | 200 |
 | GET /api/v1/movies | 200 | 200 | 200 | 200 |
 | GET /api/v1/movies/:id | 200 | 200 | 200 | 200 |
@@ -88,9 +88,8 @@ without the required role. Resource validation/not-found errors can still apply.
 
 - Brute force / credential stuffing: bcrypt and generic login errors now;
   per-IP/account rate limits and lockout policy tracked for later.
-- User enumeration: same login error and dummy-hash comparison now; monitor
-  registration abuse without exposing whether an email already exists. The
-  register endpoint returns the same 202 response for new and existing emails.
+- User enumeration: same login error and dummy-hash comparison reduce login
+  enumeration; duplicate registration returns a 422 validation_error.
 - Token theft/replay: short-lived signed bearer tokens now; require HTTPS in
   deployment, and consider refresh/revocation controls later.
 - Stale role after downgrade: role in JWT remains effective until expiry;
