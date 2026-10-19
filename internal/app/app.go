@@ -92,7 +92,8 @@ func newRouter(deps Deps) http.Handler {
 	router.RedirectFixedPath = false
 
 	authService := service.NewAuthService(deps.Users, deps.Tokens)
-	movieHandler := handler.NewMovieHandler(service.NewMovieService(deps.Movies))
+	movieService := service.NewMovieService(deps.Movies)
+	movieHandler := handler.NewMovieHandler(movieService)
 	authHandler := handler.NewAuthHandler(authService)
 	userHandler := handler.NewUserHandler(service.NewUserService(deps.Users))
 	var catalogHandler *webhandler.CatalogHandler
@@ -109,7 +110,7 @@ func newRouter(deps Deps) http.Handler {
 			panic(fmt.Errorf("initialize web static files: %w", err))
 		}
 		staticFS = http.FS(files)
-		catalogHandler = webhandler.NewCatalogHandler(deps.Catalog, renderer)
+		catalogHandler = webhandler.NewCatalogHandler(deps.Catalog, movieService, renderer)
 	}
 
 	router.GET("/health", handler.Health)
@@ -138,11 +139,12 @@ func newRouter(deps Deps) http.Handler {
 		webRoutes.Use(webSecurityHeaders(), webhandler.CSRF(deps.CookieSecure, renderer),
 			webhandler.OptionalAuth(deps.Tokens, deps.Users, deps.CookieSecure))
 		webRoutes.GET("/catalog", catalogHandler.Catalog)
-		webRoutes.GET("/web/movies", catalogHandler.Catalog)
+		webRoutes.GET("/web/movies", catalogHandler.Movies)
 		webRoutes.GET("/login", webAuthHandler.LoginPage)
 		webRoutes.POST("/login", webAuthHandler.Login)
 		webRoutes.POST("/logout", webhandler.RequireLogin(), webAuthHandler.Logout)
 		adminWebRoutes := webRoutes.Group("", webhandler.RequireRole(renderer, "admin"))
+		adminWebRoutes.DELETE("/web/movies/:id", catalogHandler.DeleteMovie)
 		adminWebRoutes.GET("/register", webAuthHandler.RegisterPage)
 		adminWebRoutes.POST("/register", webAuthHandler.Register)
 	}

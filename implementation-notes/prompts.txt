@@ -39,7 +39,7 @@ Implement:
 
 Lesson 10. Task 2.1: Layout and catalog page (layout.html, catalog.html, movie_row.html)
 
-Step 3. First append the text of THIS prompt verbatim to prompts.txt under the heading "Task 2.1: Layout and catalog page (layout.html, catalog.html, movie_row.html)". Then implement the web foundation and the catalog page.
+Implement:
 
 1. Root package web/ (embed only, no logic):
    - web/templates.go: package web; //go:embed templates (directive directly above the var, no blank line); var TemplateFS embed.FS.
@@ -60,3 +60,17 @@ Step 3. First append the text of THIS prompt verbatim to prompts.txt under the h
 8. Makefile: run (UI + API), run-api-only (WEB_UI_ENABLED=false). Update cmd/api/main.go minimally to pass the setting through.
 9. Tests: (a) go test for the renderer: parses from the embedded FS while the working directory is an empty temp dir (os.Chdir(t.TempDir())), every page template executes without error with a sample view model; (b) catalog handler smoke test through httptest: GET /catalog returns 200, text/html, contains "<!DOCTYPE html>", the layout nav, the table and the empty-state text on an empty store; (c) a title like <script>alert(1)</script> is rendered escaped (&lt;script&gt;) and never as a tag; (d) with WEB_UI_ENABLED=false (router built without the hook) GET /catalog and /static/css/style.css return the existing JSON 404 and the API is unchanged; (e) all pre-existing tests green.
 Open /catalog in a headless browser if one is available (Playwright/Chromium) and confirm the page and CSS render with no CSP violations in the console; if you cannot, say so and list what I must check manually. Commit with message "feat: embedded web layer, layout and catalog page".
+
+Lesson 10. Task 2.2: HTMX interactivity (live search and item deletion)
+Implement:
+
+1. Live search (templates + handler):
+   - In catalog.html the search input gets exactly: hx-get="/web/movies" hx-trigger="keyup changed delay:300ms, search" hx-target="#movie-list" (default innerHTML swap) hx-include="[name='genre']" hx-indicator="#search-indicator" autocomplete="off". The genre select gets hx-get="/web/movies" hx-trigger="change" hx-target="#movie-list" hx-include="[name='q']". Add a small #search-indicator element ("Searching...") styled by the existing .htmx-indicator rule. The plain form submit (Enter, or JavaScript disabled) still goes to GET /catalog, so the page works without JavaScript.
+   - Handler GET /web/movies (in internal/handler/web/catalog.go, thin, same CatalogService): when the request has HX-Request: true it renders ONLY the "movie_rows" fragment (the movie_row partials or the empty-state row; no layout, no <html>, no <head>, no nav) with status 200, Content-Type text/html; charset=utf-8, and sets the response header HX-Push-Url to the equivalent /catalog?q=...&genre=... URL (built with url.Values.Encode). Invalid pagination values -> 400 with a small escaped HTML message. When HX-Request is absent, redirect 303 to /catalog with the same query so the URL is never an orphan fragment.
+   - Stale pager: after a live search swap the Previous/Next links no longer match, so in app.js hide #pager on htmx:afterSwap for #movie-list (set the hidden attribute) and show a visually clear hint "Press Enter to see all pages". A normal page load always shows the correct pager.
+2. Delete a row:
+   - In movie_row.html the Delete button (rendered only when .CanDelete) is exactly: <button type="button" class="btn-danger" hx-delete="/web/movies/{{.ID}}" hx-target="closest tr" hx-swap="outerHTML" hx-confirm="Delete this movie?" aria-label="Delete {{.Title}}">Delete</button>. The title inside aria-label relies on autoescaping; do not use any unescaping.
+   - Handler DELETE /web/movies/:id registered behind the chain from step 4 (CSRF -> auth -> RequireRole("admin")): parse the id with the same shared id helper/rules as the API (invalid -> 400), call the SAME movie service Delete, on success respond 200 with an EMPTY body (c.Status(200) and no content, so outerHTML swaps the row away), not found -> 404, unexpected error -> generic 500 (never leak error text). Status 200 must have an empty body.
+3. app.js already shows errors on htmx:responseError; verify 401/403/404 display the right message and that nothing is swapped on errors (HTMX default).
+4. Tests (httptest, extend later in Prompt 7): HTMX search returns only fragments (contains <tr, does not contain <html or <nav or <!DOCTYPE), carries HX-Push-Url, escapes hostile titles; without HX-Request it redirects; delete as admin with valid CSRF -> 200, empty body and the movie is gone from the API list; as editor/viewer -> 403; anonymous (HTMX) -> 401 with HX-Redirect: /login; missing CSRF -> 403; unknown id -> 404; id "abc" -> 400.
+5. If a headless browser is available, drive the real page (type in the search box, click Delete and accept the confirm dialog) and report what you saw; otherwise tell me exactly which manual browser checks remain. Remember HTMX 2 does not swap 4xx/5xx responses by default: do not "fix" that.

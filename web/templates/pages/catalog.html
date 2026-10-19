@@ -5,17 +5,18 @@
   <form method="get" action="/catalog" role="search" class="search-form">
     <div class="form-field">
       <label for="q">Search movies</label>
-      <input id="q" name="q" type="search" value="{{.Q}}">
+      <input id="q" name="q" type="search" value="{{.Q}}" hx-get="/web/movies" hx-trigger="keyup changed delay:300ms, search" hx-target="#movie-list" hx-include="[name='genre']" hx-indicator="#search-indicator" autocomplete="off">
     </div>
     <div class="form-field">
       <label for="genre">Genre</label>
-      <select id="genre" name="genre">
+      <select id="genre" name="genre" hx-get="/web/movies" hx-trigger="change" hx-target="#movie-list" hx-include="[name='q']">
         <option value=""{{if eq .Genre ""}} selected{{end}}>All genres</option>
         {{range .Genres}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
       </select>
     </div>
     <input type="hidden" name="limit" value="{{.Limit}}">
     <button type="submit">Search</button>
+    <span id="search-indicator" class="htmx-indicator" aria-live="polite">Searching...</span>
   </form>
   <div class="table-wrapper" aria-live="polite">
     <table>
@@ -39,5 +40,6 @@
     <span>Page {{.Page}}</span>
     {{if .HasNext}}<a rel="next" href="{{.NextURL}}">Next</a>{{end}}
   </nav>
+  <p id="pager-hint" class="pager-hint" hidden>Press Enter to see all pages</p>
 </section>
 {{end}}
