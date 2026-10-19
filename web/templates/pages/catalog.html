@@ -1,0 +1,43 @@
+{{define "title"}}Catalog - Movies{{end}}
+{{define "content"}}
+<section class="catalog">
+  <h1>Movie catalog</h1>
+  <form method="get" action="/catalog" role="search" class="search-form">
+    <div class="form-field">
+      <label for="q">Search movies</label>
+      <input id="q" name="q" type="search" value="{{.Q}}">
+    </div>
+    <div class="form-field">
+      <label for="genre">Genre</label>
+      <select id="genre" name="genre">
+        <option value=""{{if eq .Genre ""}} selected{{end}}>All genres</option>
+        {{range .Genres}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+    </div>
+    <input type="hidden" name="limit" value="{{.Limit}}">
+    <button type="submit">Search</button>
+  </form>
+  <div class="table-wrapper" aria-live="polite">
+    <table>
+      <caption>Movies matching your search</caption>
+      <thead>
+        <tr>
+          <th scope="col">Title</th>
+          <th scope="col">Director</th>
+          <th scope="col">Country</th>
+          <th scope="col">Genre</th>
+          <th scope="col">Year</th>
+          <th scope="col">Release status</th>
+          <th scope="col">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="movie-list">{{template "movie_rows" .}}</tbody>
+    </table>
+  </div>
+  <nav id="pager" aria-label="Pagination" class="pager">
+    {{if .HasPrev}}<a rel="prev" href="{{.PrevURL}}">Previous</a>{{end}}
+    <span>Page {{.Page}}</span>
+    {{if .HasNext}}<a rel="next" href="{{.NextURL}}">Next</a>{{end}}
+  </nav>
+</section>
+{{end}}

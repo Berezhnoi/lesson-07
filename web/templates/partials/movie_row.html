@@ -1,0 +1,14 @@
+{{define "movie_row"}}
+<tr id="movie-{{.ID}}">
+  <td>{{.Title}}</td>
+  <td>{{.Director}}</td>
+  <td>{{.Country}}</td>
+  <td><span class="badge genre-badge">{{.Genre}}</span></td>
+  <td>{{.YearText}}</td>
+  <td>{{if .StatusLabel}}<span class="badge {{.StatusClass}}">{{.StatusLabel}}</span>{{else}}-{{end}}</td>
+  <td class="actions">
+    {{if .CanEdit}}<a href="/catalog/movies/{{.ID}}/edit">Edit</a>{{end}}
+    {{if .CanDelete}}<button type="button">Delete</button>{{end}}
+  </td>
+</tr>
+{{end}}

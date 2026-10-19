@@ -1,7 +1,7 @@
 include .env
 export
 
-.PHONY: db-up db-down db-logs migrate-up migrate-down migrate-create migrate-version migrate-force run seed-admin test test-db test-integration swagger fmt vet
+.PHONY: db-up db-down db-logs migrate-up migrate-down migrate-create migrate-version migrate-force run run-api-only seed-admin test test-db test-integration swagger fmt vet
 
 db-up:
 	docker compose up -d
@@ -30,7 +30,10 @@ migrate-force:
 	@docker compose run --rm migrate -path=/migrations -database "$$DATABASE_URL" force "$(version)"
 
 run:
-	DB_HOST=127.0.0.1 go run ./cmd/api
+	DB_HOST=127.0.0.1 WEB_UI_ENABLED=true go run ./cmd/api
+
+run-api-only:
+	DB_HOST=127.0.0.1 WEB_UI_ENABLED=false go run ./cmd/api
 
 seed-admin:
 	DB_HOST=127.0.0.1 go run ./cmd/seed

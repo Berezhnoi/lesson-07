@@ -3,8 +3,7 @@ package repository
 import (
 	"context"
 	"strings"
-
-	"gorm.io/gorm"
+	"time"
 
 	"homework/internal/model"
 )
@@ -12,19 +11,35 @@ import (
 var _ MovieSearcher = (*gormMovieRepository)(nil)
 
 func (repository *gormMovieRepository) Search(ctx context.Context, q, genre string, offset, limit int) ([]model.Movie, error) {
-	entities := make([]model.MovieEntity, 0)
+	type searchRow struct {
+		ID          uint64
+		Title       string
+		Director    string `gorm:"column:director_name"`
+		Country     string
+		Genre       string `gorm:"column:genre_name"`
+		ReleaseYear *int
+		Synopsis    *string
+		CreatedAt   time.Time
+		UpdatedAt   time.Time
+	}
+
+	rows := make([]searchRow, 0)
 	query := repository.db.WithContext(ctx).
-		Model(&model.MovieEntity{}).
-		Preload("Genre").
-		Preload("Directors", func(db *gorm.DB) *gorm.DB { return db.Order("directors.id ASC") }).
+		Table("movies").
+		Select(`movies.id, movies.title, movies.country, movies.release_year, movies.synopsis,
+			movies.created_at, movies.updated_at, genres.name AS genre_name,
+			(SELECT directors.full_name
+			 FROM movie_directors
+			 JOIN directors ON directors.id = movie_directors.director_id
+			 WHERE movie_directors.movie_id = movies.id
+			 ORDER BY directors.id ASC
+			 LIMIT 1) AS director_name`).
+		Joins("JOIN genres ON genres.id = movies.genre_id").
 		Order("movies.id ASC").
 		Offset(offset).
 		Limit(limit)
 	if genre != "" {
-		query = query.Where(
-			"movies.genre_id IN (SELECT genres.id FROM genres WHERE genres.name = ?)",
-			genre,
-		)
+		query = query.Where("genres.name = ?", genre)
 	}
 	if q != "" {
 		pattern := "%" + escapeMovieSearchLike(q) + "%"
@@ -39,12 +54,22 @@ func (repository *gormMovieRepository) Search(ctx context.Context, q, genre stri
 			pattern,
 		)
 	}
-	if err := query.Find(&entities).Error; err != nil {
+	if err := query.Scan(&rows).Error; err != nil {
 		return nil, wrapDatabaseError("search movies", err)
 	}
-	movies := make([]model.Movie, 0, len(entities))
-	for _, entity := range entities {
-		movie, err := movieEntityToDomain(entity)
+	movies := make([]model.Movie, 0, len(rows))
+	for _, row := range rows {
+		movie, err := movieEntityToDomain(model.MovieEntity{
+			ID:          row.ID,
+			Title:       row.Title,
+			Country:     row.Country,
+			ReleaseYear: row.ReleaseYear,
+			Synopsis:    row.Synopsis,
+			Genre:       model.Genre{Name: row.Genre},
+			Directors:   []model.Director{{FullName: row.Director}},
+			CreatedAt:   row.CreatedAt,
+			UpdatedAt:   row.UpdatedAt,
+		})
 		if err != nil {
 			return nil, err
 		}

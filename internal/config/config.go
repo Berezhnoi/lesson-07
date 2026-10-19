@@ -28,6 +28,7 @@ type Config struct {
 	JWTTTL            time.Duration
 	AdminEmail        string
 	AdminPassword     string
+	WebUIEnabled      bool
 }
 
 func Load() (Config, error) {
@@ -86,6 +87,9 @@ func Load() (Config, error) {
 	cfg.AllowedOrigin = stringValue("ALLOWED_ORIGIN", "*")
 	cfg.AdminEmail = stringValue("ADMIN_EMAIL", "")
 	cfg.AdminPassword = stringValue("ADMIN_PASSWORD", "")
+	if cfg.WebUIEnabled, err = boolValue("WEB_UI_ENABLED", true); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
 }
 
@@ -127,6 +131,21 @@ func intValue(name string, fallback int) (int, error) {
 		return 0, fmt.Errorf("parse %s: %w", name, err)
 	}
 	return parsed, nil
+}
+
+func boolValue(name string, fallback bool) (bool, error) {
+	value, exists := os.LookupEnv(name)
+	if !exists {
+		return fallback, nil
+	}
+	switch value {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, fmt.Errorf("parse %s: must be true or false", name)
+	}
 }
 
 func durationValue(name string, fallback time.Duration) (time.Duration, error) {
