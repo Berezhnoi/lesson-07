@@ -37,6 +37,78 @@ Public registrations receive the `viewer` role. Access tokens use HS256 and the 
 by default); send them as `Authorization: Bearer <token>`. Set `JWT_SECRET` to a private value of at least
 32 bytes. For setup details and the access matrix, see the [implementation notes](./implementation-notes/README.md).
 
+The browser UI stores its access token in an HttpOnly cookie. `COOKIE_SECURE` defaults to `false` for
+local `http://localhost` development; it **MUST** be set to `true` when the UI is served behind HTTPS.
+
+## Web UI
+
+The server-rendered UI and JSON API run in the same binary. `make run` starts both (the default,
+`WEB_UI_ENABLED=true`); `make run-api-only` sets `WEB_UI_ENABLED=false` and serves only the API. The UI
+uses the existing movie and authentication services. Its routes are:
+
+| Page or action | Route | Access |
+|---|---|---|
+| Login / registration | `GET, POST /login`, `GET, POST /register` | Public |
+| Catalog | `GET /`, `GET /catalog` | Public catalog; anonymous users are redirected to login |
+| Live catalog rows | `GET /web/movies` | Login required |
+| Create movie | `GET, POST /movies/new` | Editor or admin |
+| Edit movie | `GET, POST /movies/{id}/edit` | Editor or admin |
+| Delete movie | `DELETE /web/movies/{id}` | Admin only |
+| Logout and assets | `POST /logout`, `GET /static/{path}` | Authenticated logout; public assets |
+
+Browser login puts the JWT in the `access_token` HttpOnly, SameSite=Lax cookie. JavaScript cannot read
+that cookie, unlike a token in localStorage, so an XSS flaw cannot directly extract the bearer token.
+State-changing browser requests also require a CSRF token and an Origin host check. `COOKIE_SECURE`
+controls the cookie Secure flag: it defaults to `false` for local HTTP, and must be `true` behind HTTPS
+so browsers send the cookie only over encrypted connections. The JSON API remains header-only and accepts
+`Authorization: Bearer <token>`; it does not authenticate from browser cookies.
+
+| UI action | Anonymous | Viewer | Editor | Admin |
+|---|---:|---:|---:|---:|
+| Browse/search catalog | Redirect to login | Yes | Yes | Yes |
+| Create/edit movies | Redirect to login | 403 | Yes | Yes |
+| Delete movies | 401 for HTMX / login redirect | 403 | 403 | Yes |
+| Register accounts | Public registration | No | No | Yes |
+
+HTMX is vendored locally (2.0.4; SHA-256 `e209dda5c8235479f3166defc7750e1dbcd5a5c1808b7792fc2e6733768fb447`): live search replaces
+the movie rows, and admin delete removes a row after an empty 200 response. Search, pagination, and forms
+also work without JavaScript; after a live search the stale pager is hidden until Enter reloads the results.
+
+Templates live under `web/templates`: a shared layout, reusable partials, and page templates. The renderer
+parses one template set per page because Go template definitions share a namespace inside a set; separate
+sets prevent pages' common `title` and `content` blocks from overwriting one another. A separate partial
+set renders HTMX fragments. `go:embed` includes templates and assets, `template.ParseFS` parses templates,
+and `fs.Sub(staticFS, "static")` serves the asset subtree without a duplicated `/static` segment.
+
+Build the self-contained UI binary with `make build` and run `make verify-isolation` to copy that binary
+into a clean temporary directory and request embedded pages/assets. This proves the UI does not need its
+source tree or loose template/static files at runtime; PostgreSQL remains an external runtime dependency.
+The relevant environment variables are `WEB_UI_ENABLED` (strict boolean, default `true`) and
+`COOKIE_SECURE` (strict boolean, default `false`; set `true` for HTTPS). The current Origin check compares
+hosts; deployments behind a TLS-terminating proxy should also validate the configured public scheme/origin.
+
+The release-status badge reflects release year: Upcoming, New (within two years), or Classic; an unknown
+year displays `-`. Known limitations: a role change does not invalidate an existing JWT, there is no rate
+limiting, PostgreSQL is still external to the binary, and the pager is hidden after live search because its
+links refer to the previous result set.
+
+## Lesson 10 course checklist
+
+| Item | Where | OK |
+|---|---|---|
+| HttpOnly-cookie rationale and localStorage XSS risk | `implementation-notes/design_v10.txt`, section 2 | Yes |
+| Manual audit: `text/template` imports | `internal` and `web` Go sources: none; audit test checks AST imports | Yes |
+| Manual audit: `template.HTML`, `JS`, `CSS`, `URL`, `HTMLAttr` and related trusted types | `internal` and `web` Go sources: none; audit test checks Go AST | Yes |
+| Manual audit: inline event handlers/scripts and unsafe template pipelines | `web/templates/**/*.html`: none | Yes |
+| Single-binary isolation | `make verify-isolation` | Yes, when run successfully |
+| Embedded FS setup | `web/templates.go`, `web/static.go`, and wiring in `cmd/api/main.go` | Yes |
+| Layout content block and movie-row partial | `web/templates/layout.html`, `web/templates/partials/movie_row.html` | Yes |
+| Exact live-search attributes | `web/templates/pages/catalog.html` | Yes |
+| Exact delete attributes and empty 200 handler | `web/templates/partials/movie_row.html`, `internal/handler/web/catalog.go` | Yes |
+| Required catalog cases | `internal/handler/web/catalog_test.go` | Yes |
+| Lesson 9 Tasks 2.1 and 2.2 retained | `implementation-notes/prompts.txt` | Yes |
+| JWT only in HttpOnly access cookie; contextual autoescaping retained | `internal/handler/web/auth.go`, templates, and audit test | Yes |
+
 ## Development
 
 ```sh

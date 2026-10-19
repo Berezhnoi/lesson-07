@@ -1,0 +1,8 @@
+{{define "title"}}{{.StatusText}} - Movies{{end}}
+{{define "content"}}
+<section class="error-page">
+  <h1>{{.StatusText}}</h1>
+  <p>{{.Message}}</p>
+  <a href="/catalog">Back to the catalog</a>
+</section>
+{{end}}

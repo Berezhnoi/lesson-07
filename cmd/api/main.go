@@ -89,6 +89,8 @@ func run() error {
 			Users:         repository.NewGormUserRepository(db),
 			Tokens:        tokens,
 			EnableSwagger: true,
+			WebUIEnabled:  &cfg.WebUIEnabled,
+			CookieSecure:  cfg.CookieSecure,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

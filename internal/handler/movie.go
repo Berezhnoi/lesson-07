@@ -3,7 +3,6 @@ package handler
 import (
 	"io"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -164,9 +163,5 @@ func (handler *MovieHandler) delete(c *gin.Context) {
 }
 
 func parseID(c *gin.Context) (uint32, error) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		return 0, service.InvalidIDError{}
-	}
-	return uint32(id), nil
+	return service.ParseMovieID(c.Param("id"))
 }

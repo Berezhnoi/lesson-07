@@ -5,6 +5,7 @@
 package app
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -16,17 +17,22 @@ import (
 	"homework/internal/apperr"
 	"homework/internal/auth"
 	"homework/internal/handler"
+	webhandler "homework/internal/handler/web"
 	"homework/internal/middleware"
 	"homework/internal/repository"
 	"homework/internal/service"
+	webui "homework/web"
 )
 
 type Deps struct {
 	Movies        repository.MovieRepository
+	Catalog       *service.CatalogService
 	Users         repository.UserRepository
 	Tokens        *auth.TokenManager
 	EnableSwagger bool
 	Secure        bool
+	CookieSecure  bool
+	WebUIEnabled  *bool
 }
 
 // NewRouter creates a router and a fresh in-memory repository for each call.
@@ -46,6 +52,10 @@ func NewRouterWithRepository(movieRepository repository.MovieRepository) http.Ha
 
 func NewRouterWithDeps(deps Deps) http.Handler {
 	deps.Secure = true
+	if deps.WebUIEnabled == nil {
+		enabled := true
+		deps.WebUIEnabled = &enabled
+	}
 	if deps.Movies == nil {
 		deps.Movies = repository.NewInMemoryMovieRepositoryAdapter()
 	}
@@ -70,6 +80,9 @@ func unprotectedDeps(movieRepository repository.MovieRepository, enableSwagger b
 }
 
 func newRouter(deps Deps) http.Handler {
+	if deps.Catalog == nil {
+		deps.Catalog = service.NewCatalogService(repository.NewMovieSearcher(deps.Movies))
+	}
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	// CORS must wrap recovery so panic responses also receive CORS headers.
@@ -78,9 +91,27 @@ func newRouter(deps Deps) http.Handler {
 	router.RedirectTrailingSlash = false
 	router.RedirectFixedPath = false
 
-	movieHandler := handler.NewMovieHandler(service.NewMovieService(deps.Movies))
-	authHandler := handler.NewAuthHandler(service.NewAuthService(deps.Users, deps.Tokens))
+	authService := service.NewAuthService(deps.Users, deps.Tokens)
+	movieService := service.NewMovieService(deps.Movies)
+	movieHandler := handler.NewMovieHandler(movieService)
+	authHandler := handler.NewAuthHandler(authService)
 	userHandler := handler.NewUserHandler(service.NewUserService(deps.Users))
+	var catalogHandler *webhandler.CatalogHandler
+	var renderer *webhandler.Renderer
+	var staticFS http.FileSystem
+	var err error
+	if deps.Secure && *deps.WebUIEnabled {
+		renderer, err = webhandler.NewRenderer()
+		if err != nil {
+			panic(fmt.Errorf("initialize web templates: %w", err))
+		}
+		files, err := webui.StaticFS()
+		if err != nil {
+			panic(fmt.Errorf("initialize web static files: %w", err))
+		}
+		staticFS = http.FS(files)
+		catalogHandler = webhandler.NewCatalogHandler(deps.Catalog, movieService, renderer)
+	}
 
 	router.GET("/health", handler.Health)
 	api := router.Group("/api/v1")
@@ -98,6 +129,30 @@ func newRouter(deps Deps) http.Handler {
 		router.GET("/api/v1/health", handler.Health)
 		router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, ginSwagger.URL("/swagger/doc.json")))
 	}
+	if catalogHandler != nil {
+		staticRoutes := router.Group("", webSecurityHeaders())
+		staticRoutes.GET("/static/*filepath", gin.WrapH(http.StripPrefix("/static/", http.FileServer(staticFS))))
+		staticRoutes.GET("/", catalogHandler.Root)
+
+		webAuthHandler := webhandler.NewAuthHandler(authService, renderer, deps.CookieSecure)
+		webRoutes := router.Group("")
+		webRoutes.Use(webSecurityHeaders(), webhandler.CSRF(deps.CookieSecure, renderer),
+			webhandler.OptionalAuth(deps.Tokens, deps.Users, deps.CookieSecure))
+		webRoutes.GET("/catalog", catalogHandler.Catalog)
+		webRoutes.GET("/web/movies", catalogHandler.Movies)
+		webRoutes.GET("/login", webAuthHandler.LoginPage)
+		webRoutes.POST("/login", webAuthHandler.Login)
+		webRoutes.POST("/logout", webhandler.RequireLogin(), webAuthHandler.Logout)
+		editorWebRoutes := webRoutes.Group("", webhandler.RequireRole(renderer, "editor", "admin"))
+		editorWebRoutes.GET("/movies/new", catalogHandler.NewMoviePage)
+		editorWebRoutes.POST("/movies/new", catalogHandler.CreateMovie)
+		editorWebRoutes.GET("/movies/:id/edit", catalogHandler.EditMoviePage)
+		editorWebRoutes.POST("/movies/:id/edit", catalogHandler.UpdateMovie)
+		adminWebRoutes := webRoutes.Group("", webhandler.RequireRole(renderer, "admin"))
+		adminWebRoutes.DELETE("/web/movies/:id", catalogHandler.DeleteMovie)
+		adminWebRoutes.GET("/register", webAuthHandler.RegisterPage)
+		adminWebRoutes.POST("/register", webAuthHandler.Register)
+	}
 	router.NoRoute(func(c *gin.Context) {
 		apperr.WriteError(c, apperr.HTTPError{Status: http.StatusNotFound, Code: "not_found", Message: "Route not found"})
 	})
@@ -105,4 +160,13 @@ func newRouter(deps Deps) http.Handler {
 		apperr.WriteError(c, apperr.HTTPError{Status: http.StatusMethodNotAllowed, Code: "not_found", Message: "Method not allowed"})
 	})
 	return router
+}
+
+func webSecurityHeaders() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("Referrer-Policy", "same-origin")
+		c.Next()
+	}
 }

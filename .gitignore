@@ -1,5 +1,6 @@
 # binaries and test artifacts
 /api
+/bin/
 .env
 *.exe
 *.out

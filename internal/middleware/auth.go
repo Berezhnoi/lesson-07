@@ -47,6 +47,11 @@ func UserIDFrom(c *gin.Context) (uint, bool) {
 	return uint(id), ok
 }
 
+func SetPrincipal(c *gin.Context, userID uint64, role string) {
+	c.Set(userIDContextKey, userID)
+	c.Set(roleContextKey, role)
+}
+
 func RoleFrom(c *gin.Context) (string, bool) {
 	value, ok := c.Get(roleContextKey)
 	if !ok {
@@ -54,6 +59,19 @@ func RoleFrom(c *gin.Context) (string, bool) {
 	}
 	role, ok := value.(string)
 	return role, ok
+}
+
+func SetDisplayName(c *gin.Context, name string) {
+	c.Set("user_name", name)
+}
+
+func DisplayNameFrom(c *gin.Context) (string, bool) {
+	value, ok := c.Get("user_name")
+	if !ok {
+		return "", false
+	}
+	name, ok := value.(string)
+	return name, ok
 }
 
 func abortUnauthorized(c *gin.Context, message string) {

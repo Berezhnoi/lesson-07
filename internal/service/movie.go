@@ -36,6 +36,14 @@ type InvalidIDError struct{}
 
 func (InvalidIDError) Error() string { return "Invalid movie id" }
 
+func ParseMovieID(value string) (uint32, error) {
+	id, err := strconv.ParseUint(value, 10, 32)
+	if err != nil {
+		return 0, InvalidIDError{}
+	}
+	return uint32(id), nil
+}
+
 type InvalidPaginationError struct {
 	Message string
 }

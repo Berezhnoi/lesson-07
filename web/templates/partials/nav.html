@@ -1,0 +1,20 @@
+{{define "nav"}}
+<header class="site-header">
+  <a class="brand" href="/catalog">Movies</a>
+  <nav aria-label="Main navigation">
+    <a href="/catalog">Catalog</a>
+    {{if and .User .User.CanAddMovie}}<a href="/movies/new">Add movie</a>{{end}}
+    {{if .User}}
+      <span class="account-name">{{.User.Name}}</span>
+      <span class="badge role-badge">{{.User.RoleLabel}}</span>
+      {{if .User.CanRegister}}<a href="/register">Register</a>{{end}}
+      <form method="post" action="/logout" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <button type="submit">Log out</button>
+      </form>
+    {{else}}
+      <a href="/login">Log in</a>
+    {{end}}
+  </nav>
+</header>
+{{end}}

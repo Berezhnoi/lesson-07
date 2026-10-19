@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +24,11 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("JWT_TTL", "")
 	t.Setenv("ADMIN_EMAIL", "")
 	t.Setenv("ADMIN_PASSWORD", "")
+	t.Setenv("WEB_UI_ENABLED", "true")
+	t.Setenv("COOKIE_SECURE", "false")
+	if err := os.Unsetenv("COOKIE_SECURE"); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg, err := Load()
 	if err != nil {
@@ -43,8 +49,57 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.JWTTTL != 24*time.Hour || cfg.AdminEmail != "" || cfg.AdminPassword != "" {
 		t.Errorf("auth defaults = (%s, %q, %q), want (24h, empty, empty)", cfg.JWTTTL, cfg.AdminEmail, cfg.AdminPassword)
 	}
+	if !cfg.WebUIEnabled {
+		t.Error("WebUIEnabled = false, want default true")
+	}
+	if cfg.CookieSecure {
+		t.Error("CookieSecure = true, want default false for local HTTP development")
+	}
 	if got, want := cfg.PostgresDSN(), "postgres://movies:test-password@localhost:5432/movies?sslmode=disable"; got != want {
 		t.Errorf("PostgresDSN() = %q, want %q", got, want)
+	}
+
+}
+
+func TestLoadParsesCookieSecureStrictly(t *testing.T) {
+	setDatabaseEnvironment(t)
+	t.Setenv("JWT_SECRET", "test-secret-with-at-least-32-bytes")
+	t.Setenv("COOKIE_SECURE", "true")
+	cfg, err := Load()
+	if err != nil || !cfg.CookieSecure {
+		t.Fatalf("Load() CookieSecure = %t, error = %v; want true, nil", cfg.CookieSecure, err)
+	}
+	t.Setenv("COOKIE_SECURE", "yes")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "COOKIE_SECURE") {
+		t.Fatalf("Load() error = %v, want strict COOKIE_SECURE parse error", err)
+	}
+}
+
+func TestLoadParsesWebUIEnabledStrictly(t *testing.T) {
+	setDatabaseEnvironment(t)
+	t.Setenv("JWT_SECRET", "test-secret-with-at-least-32-bytes")
+	t.Setenv("WEB_UI_ENABLED", "false")
+	cfg, err := Load()
+	if err != nil || cfg.WebUIEnabled {
+		t.Fatalf("Load() WebUIEnabled = %t, error = %v; want false, nil", cfg.WebUIEnabled, err)
+	}
+	t.Setenv("WEB_UI_ENABLED", "yes")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "WEB_UI_ENABLED") {
+		t.Fatalf("Load() error = %v, want strict WEB_UI_ENABLED parse error", err)
+	}
+}
+
+func TestBoolValueDefaultsOnlyWhenUnset(t *testing.T) {
+	t.Setenv("WEB_UI_ENABLED", "true")
+	if err := os.Unsetenv("WEB_UI_ENABLED"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := boolValue("WEB_UI_ENABLED", true); err != nil || !got {
+		t.Fatalf("boolValue() = %t, %v; want true, nil when unset", got, err)
+	}
+	t.Setenv("WEB_UI_ENABLED", "")
+	if _, err := boolValue("WEB_UI_ENABLED", true); err == nil {
+		t.Fatal("boolValue() accepted an explicitly empty value")
 	}
 }
 
