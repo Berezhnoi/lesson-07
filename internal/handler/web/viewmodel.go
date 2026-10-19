@@ -76,6 +76,21 @@ type RegisterPage struct {
 	Error string
 }
 
+type MovieFormPage struct {
+	BasePage
+	Heading     string
+	Action      string
+	SubmitText  string
+	TitleValue  string
+	Director    string
+	Country     string
+	Genre       string
+	ReleaseYear string
+	Synopsis    string
+	Genres      []string
+	Errors      []string
+}
+
 func MapMovie(movie model.Movie, now time.Time) MovieRowView {
 	row := MovieRowView{
 		ID:       movie.ID,

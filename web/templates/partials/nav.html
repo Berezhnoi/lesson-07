@@ -3,7 +3,7 @@
   <a class="brand" href="/catalog">Movies</a>
   <nav aria-label="Main navigation">
     <a href="/catalog">Catalog</a>
-    {{if and .User .User.CanAddMovie}}<a href="/catalog/movies/new">Add movie</a>{{end}}
+    {{if and .User .User.CanAddMovie}}<a href="/movies/new">Add movie</a>{{end}}
     {{if .User}}
       <span class="account-name">{{.User.Name}}</span>
       <span class="badge role-badge">{{.User.RoleLabel}}</span>

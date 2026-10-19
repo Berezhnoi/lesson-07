@@ -1,0 +1,41 @@
+{{define "title"}}{{.Title}}{{end}}
+{{define "content"}}
+<section class="movie-form-page">
+  <h1>{{.Heading}}</h1>
+  {{if .Errors}}
+  <div class="error-page" role="alert">
+    <p>Please correct the following error:</p>
+    <ul>{{range .Errors}}<li>{{.}}</li>{{end}}</ul>
+  </div>
+  {{end}}
+  <form method="post" action="{{.Action}}" class="movie-form">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <div class="form-field">
+      <label for="title">Title</label>
+      <input id="title" name="title" type="text" value="{{.TitleValue}}">
+    </div>
+    <div class="form-field">
+      <label for="director">Director</label>
+      <input id="director" name="director" type="text" value="{{.Director}}">
+    </div>
+    <div class="form-field">
+      <label for="country">Country</label>
+      <input id="country" name="country" type="text" value="{{.Country}}">
+    </div>
+    <div class="form-field">
+      <label for="genre">Genre</label>
+      <input id="genre" name="genre" type="text" value="{{.Genre}}" list="movie-genres">
+      <datalist id="movie-genres">{{range .Genres}}<option value="{{.}}">{{end}}</datalist>
+    </div>
+    <div class="form-field">
+      <label for="release_year">Release year (optional)</label>
+      <input id="release_year" name="release_year" type="number" step="any" value="{{.ReleaseYear}}">
+    </div>
+    <div class="form-field">
+      <label for="synopsis">Synopsis (optional)</label>
+      <textarea id="synopsis" name="synopsis" rows="5">{{.Synopsis}}</textarea>
+    </div>
+    <button type="submit">{{.SubmitText}}</button>
+  </form>
+</section>
+{{end}}
