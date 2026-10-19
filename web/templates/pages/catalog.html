@@ -5,7 +5,7 @@
   <form method="get" action="/catalog" role="search" class="search-form">
     <div class="form-field">
       <label for="q">Search movies</label>
-      <input id="q" name="q" type="search" value="{{.Q}}" hx-get="/web/movies" hx-trigger="keyup changed delay:300ms, search" hx-target="#movie-list" hx-include="[name='genre']" hx-indicator="#search-indicator" autocomplete="off">
+      <input id="q" name="q" type="search" value="{{.Q}}" hx-get="/web/movies" hx-trigger="keyup changed delay:300ms" hx-target="#movie-list" hx-include="[name='genre']" hx-indicator="#search-indicator" autocomplete="off">
     </div>
     <div class="form-field">
       <label for="genre">Genre</label>

@@ -58,7 +58,7 @@ uses the existing movie and authentication services. Its routes are:
 
 Browser login puts the JWT in the `access_token` HttpOnly, SameSite=Lax cookie. JavaScript cannot read
 that cookie, unlike a token in localStorage, so an XSS flaw cannot directly extract the bearer token.
-State-changing browser requests also require a CSRF token and a same-origin Origin check. `COOKIE_SECURE`
+State-changing browser requests also require a CSRF token and an Origin host check. `COOKIE_SECURE`
 controls the cookie Secure flag: it defaults to `false` for local HTTP, and must be `true` behind HTTPS
 so browsers send the cookie only over encrypted connections. The JSON API remains header-only and accepts
 `Authorization: Bearer <token>`; it does not authenticate from browser cookies.
@@ -84,7 +84,8 @@ Build the self-contained UI binary with `make build` and run `make verify-isolat
 into a clean temporary directory and request embedded pages/assets. This proves the UI does not need its
 source tree or loose template/static files at runtime; PostgreSQL remains an external runtime dependency.
 The relevant environment variables are `WEB_UI_ENABLED` (strict boolean, default `true`) and
-`COOKIE_SECURE` (strict boolean, default `false`; set `true` for HTTPS).
+`COOKIE_SECURE` (strict boolean, default `false`; set `true` for HTTPS). The current Origin check compares
+hosts; deployments behind a TLS-terminating proxy should also validate the configured public scheme/origin.
 
 The release-status badge reflects release year: Upcoming, New (within two years), or Classic; an unknown
 year displays `-`. Known limitations: a role change does not invalidate an existing JWT, there is no rate
