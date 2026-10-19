@@ -31,6 +31,7 @@ type Deps struct {
 	Tokens        *auth.TokenManager
 	EnableSwagger bool
 	Secure        bool
+	CookieSecure  bool
 	WebUIEnabled  *bool
 }
 
@@ -90,13 +91,16 @@ func newRouter(deps Deps) http.Handler {
 	router.RedirectTrailingSlash = false
 	router.RedirectFixedPath = false
 
+	authService := service.NewAuthService(deps.Users, deps.Tokens)
 	movieHandler := handler.NewMovieHandler(service.NewMovieService(deps.Movies))
-	authHandler := handler.NewAuthHandler(service.NewAuthService(deps.Users, deps.Tokens))
+	authHandler := handler.NewAuthHandler(authService)
 	userHandler := handler.NewUserHandler(service.NewUserService(deps.Users))
 	var catalogHandler *webhandler.CatalogHandler
+	var renderer *webhandler.Renderer
 	var staticFS http.FileSystem
+	var err error
 	if deps.Secure && *deps.WebUIEnabled {
-		renderer, err := webhandler.NewRenderer()
+		renderer, err = webhandler.NewRenderer()
 		if err != nil {
 			panic(fmt.Errorf("initialize web templates: %w", err))
 		}
@@ -125,11 +129,22 @@ func newRouter(deps Deps) http.Handler {
 		router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, ginSwagger.URL("/swagger/doc.json")))
 	}
 	if catalogHandler != nil {
+		staticRoutes := router.Group("", webSecurityHeaders())
+		staticRoutes.GET("/static/*filepath", gin.WrapH(http.StripPrefix("/static/", http.FileServer(staticFS))))
+		staticRoutes.GET("/", catalogHandler.Root)
+
+		webAuthHandler := webhandler.NewAuthHandler(authService, renderer, deps.CookieSecure)
 		webRoutes := router.Group("")
-		webRoutes.Use(webSecurityHeaders())
-		webRoutes.GET("/static/*filepath", gin.WrapH(http.StripPrefix("/static/", http.FileServer(staticFS))))
-		webRoutes.GET("/", catalogHandler.Root)
+		webRoutes.Use(webSecurityHeaders(), webhandler.CSRF(deps.CookieSecure, renderer),
+			webhandler.OptionalAuth(deps.Tokens, deps.Users, deps.CookieSecure))
 		webRoutes.GET("/catalog", catalogHandler.Catalog)
+		webRoutes.GET("/web/movies", catalogHandler.Catalog)
+		webRoutes.GET("/login", webAuthHandler.LoginPage)
+		webRoutes.POST("/login", webAuthHandler.Login)
+		webRoutes.POST("/logout", webhandler.RequireLogin(), webAuthHandler.Logout)
+		adminWebRoutes := webRoutes.Group("", webhandler.RequireRole(renderer, "admin"))
+		adminWebRoutes.GET("/register", webAuthHandler.RegisterPage)
+		adminWebRoutes.POST("/register", webAuthHandler.Register)
 	}
 	router.NoRoute(func(c *gin.Context) {
 		apperr.WriteError(c, apperr.HTTPError{Status: http.StatusNotFound, Code: "not_found", Message: "Route not found"})

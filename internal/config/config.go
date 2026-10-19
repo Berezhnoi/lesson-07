@@ -29,6 +29,7 @@ type Config struct {
 	AdminEmail        string
 	AdminPassword     string
 	WebUIEnabled      bool
+	CookieSecure      bool
 }
 
 func Load() (Config, error) {
@@ -88,6 +89,9 @@ func Load() (Config, error) {
 	cfg.AdminEmail = stringValue("ADMIN_EMAIL", "")
 	cfg.AdminPassword = stringValue("ADMIN_PASSWORD", "")
 	if cfg.WebUIEnabled, err = boolValue("WEB_UI_ENABLED", true); err != nil {
+		return Config{}, err
+	}
+	if cfg.CookieSecure, err = boolValue("COOKIE_SECURE", false); err != nil {
 		return Config{}, err
 	}
 	return cfg, nil

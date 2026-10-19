@@ -11,6 +11,7 @@ type UserView struct {
 	Name        string
 	RoleLabel   string
 	CanAddMovie bool
+	CanRegister bool
 }
 
 type BasePage struct {
@@ -58,6 +59,21 @@ type ErrorPage struct {
 	BasePage
 	StatusText string
 	Message    string
+}
+
+type LoginPage struct {
+	BasePage
+	Email  string
+	Next   string
+	Error  string
+	Notice string
+}
+
+type RegisterPage struct {
+	BasePage
+	Email string
+	Name  string
+	Error string
 }
 
 func MapMovie(movie model.Movie, now time.Time) MovieRowView {

@@ -9,26 +9,27 @@ import (
 )
 
 func RequireRole(allowed ...string) gin.HandlerFunc {
-	allowedSet := make(map[string]struct{}, len(allowed))
-	for _, role := range allowed {
-		allowedSet[role] = struct{}{}
-	}
 	return func(c *gin.Context) {
 		role, ok := RoleFrom(c)
 		if !ok || role == "" {
 			abortUnauthorized(c, "authentication required")
 			return
 		}
-		if len(allowedSet) == 0 {
-			abortForbidden(c)
-			return
-		}
-		if _, allowedRole := allowedSet[role]; !allowedRole {
+		if !RoleAllowed(role, allowed...) {
 			abortForbidden(c)
 			return
 		}
 		c.Next()
 	}
+}
+
+func RoleAllowed(role string, allowed ...string) bool {
+	for _, allowedRole := range allowed {
+		if role == allowedRole {
+			return true
+		}
+	}
+	return false
 }
 
 func abortForbidden(c *gin.Context) {

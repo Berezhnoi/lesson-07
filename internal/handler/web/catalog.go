@@ -6,10 +6,12 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"homework/internal/middleware"
 	"homework/internal/service"
 )
 
@@ -85,9 +87,24 @@ func (handler *CatalogHandler) Catalog(c *gin.Context) {
 		HasPrev:  page > 1,
 		HasNext:  hasNext,
 	}
+	if userID, ok := middleware.UserIDFrom(c); ok && userID > 0 {
+		role, _ := middleware.RoleFrom(c)
+		name, _ := middleware.DisplayNameFrom(c)
+		view.User = &UserView{
+			Name: name, RoleLabel: roleLabel(role),
+			CanAddMovie: middleware.RoleAllowed(role, "editor", "admin"),
+			CanRegister: role == "admin",
+		}
+	}
 	view.Movies = make([]MovieRowView, 0, len(movies))
 	for _, movie := range movies {
-		view.Movies = append(view.Movies, MapMovie(movie, now))
+		row := MapMovie(movie, now)
+		if view.User != nil {
+			role, _ := middleware.RoleFrom(c)
+			row.CanEdit = middleware.RoleAllowed(role, "editor", "admin")
+			row.CanDelete = role == "admin"
+		}
+		view.Movies = append(view.Movies, row)
 	}
 	for _, genre := range genres {
 		view.Genres = append(view.Genres, GenreOption{Value: genre, Label: genre, Selected: genre == view.Genre})
@@ -99,6 +116,13 @@ func (handler *CatalogHandler) Catalog(c *gin.Context) {
 		view.NextURL = pageURL(view.Q, view.Genre, limit, page+1)
 	}
 	handler.renderer.Page(c, http.StatusOK, "catalog", view)
+}
+
+func roleLabel(role string) string {
+	if role == "" {
+		return ""
+	}
+	return strings.ToUpper(role[:1]) + role[1:]
 }
 
 func pageURL(query, genre string, limit, page int) string {

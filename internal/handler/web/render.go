@@ -26,7 +26,7 @@ func NewRenderer() (*Renderer, error) {
 		partials + "movie_row.html",
 		partials + "movie_rows.html",
 	}
-	renderer := &Renderer{pages: make(map[string]*template.Template, 2)}
+	renderer := &Renderer{pages: make(map[string]*template.Template, 4)}
 	fragmentFiles := make([]string, 0, len(partialFiles))
 	for _, file := range partialFiles {
 		fragmentFiles = append(fragmentFiles, file)
@@ -37,8 +37,10 @@ func NewRenderer() (*Renderer, error) {
 		return nil, fmt.Errorf("parse web fragment templates: %w", err)
 	}
 	for page, file := range map[string]string{
-		"catalog": "templates/pages/catalog.html",
-		"error":   "templates/pages/error.html",
+		"catalog":  "templates/pages/catalog.html",
+		"error":    "templates/pages/error.html",
+		"login":    "templates/pages/login.html",
+		"register": "templates/pages/register.html",
 	} {
 		files := append([]string{layout}, partialFiles...)
 		files = append(files, file)
@@ -57,6 +59,7 @@ func (renderer *Renderer) Page(c *gin.Context, status int, name string, data any
 		renderer.renderFailure(c, fmt.Errorf("unknown page template %q", name))
 		return
 	}
+	data = withCSRFToken(data, CSRFTokenFrom(c))
 	var output bytes.Buffer
 	if err := parsed.ExecuteTemplate(&output, "layout", data); err != nil {
 		renderer.renderFailure(c, err)
@@ -65,6 +68,25 @@ func (renderer *Renderer) Page(c *gin.Context, status int, name string, data any
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Status(status)
 	_, _ = c.Writer.Write(output.Bytes())
+}
+
+func withCSRFToken(data any, token string) any {
+	switch page := data.(type) {
+	case CatalogPage:
+		page.CSRFToken = token
+		return page
+	case ErrorPage:
+		page.CSRFToken = token
+		return page
+	case LoginPage:
+		page.CSRFToken = token
+		return page
+	case RegisterPage:
+		page.CSRFToken = token
+		return page
+	default:
+		return data
+	}
 }
 
 func (renderer *Renderer) Fragment(c *gin.Context, status int, name string, data any) {

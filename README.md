@@ -37,6 +37,9 @@ Public registrations receive the `viewer` role. Access tokens use HS256 and the 
 by default); send them as `Authorization: Bearer <token>`. Set `JWT_SECRET` to a private value of at least
 32 bytes. For setup details and the access matrix, see the [implementation notes](./implementation-notes/README.md).
 
+The browser UI stores its access token in an HttpOnly cookie. `COOKIE_SECURE` defaults to `false` for
+local `http://localhost` development; it **MUST** be set to `true` when the UI is served behind HTTPS.
+
 ## Development
 
 ```sh

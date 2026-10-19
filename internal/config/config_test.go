@@ -25,6 +25,10 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("ADMIN_EMAIL", "")
 	t.Setenv("ADMIN_PASSWORD", "")
 	t.Setenv("WEB_UI_ENABLED", "true")
+	t.Setenv("COOKIE_SECURE", "false")
+	if err := os.Unsetenv("COOKIE_SECURE"); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg, err := Load()
 	if err != nil {
@@ -48,10 +52,27 @@ func TestLoadDefaults(t *testing.T) {
 	if !cfg.WebUIEnabled {
 		t.Error("WebUIEnabled = false, want default true")
 	}
+	if cfg.CookieSecure {
+		t.Error("CookieSecure = true, want default false for local HTTP development")
+	}
 	if got, want := cfg.PostgresDSN(), "postgres://movies:test-password@localhost:5432/movies?sslmode=disable"; got != want {
 		t.Errorf("PostgresDSN() = %q, want %q", got, want)
 	}
 
+}
+
+func TestLoadParsesCookieSecureStrictly(t *testing.T) {
+	setDatabaseEnvironment(t)
+	t.Setenv("JWT_SECRET", "test-secret-with-at-least-32-bytes")
+	t.Setenv("COOKIE_SECURE", "true")
+	cfg, err := Load()
+	if err != nil || !cfg.CookieSecure {
+		t.Fatalf("Load() CookieSecure = %t, error = %v; want true, nil", cfg.CookieSecure, err)
+	}
+	t.Setenv("COOKIE_SECURE", "yes")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "COOKIE_SECURE") {
+		t.Fatalf("Load() error = %v, want strict COOKIE_SECURE parse error", err)
+	}
 }
 
 func TestLoadParsesWebUIEnabledStrictly(t *testing.T) {

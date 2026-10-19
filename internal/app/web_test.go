@@ -54,7 +54,7 @@ func TestCatalogPageSmokeAndEscaping(t *testing.T) {
 func TestWebRoutesCanBeDisabledWithoutChangingAPI(t *testing.T) {
 	disabled := false
 	router := app.NewRouterWithDeps(app.Deps{WebUIEnabled: &disabled})
-	for _, path := range []string{"/catalog", "/static/css/style.css"} {
+	for _, path := range []string{"/catalog", "/login", "/register", "/static/css/style.css"} {
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
 		if response.Code != http.StatusNotFound {
@@ -79,6 +79,11 @@ func TestWebRoutesAndStaticAssetsHaveSecurityHeaders(t *testing.T) {
 		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, requestPath, nil))
 		if response.Code != http.StatusOK && requestPath != "/" {
 			t.Errorf("GET %s status = %d, want 200", requestPath, response.Code)
+		}
+		registerResponse := httptest.NewRecorder()
+		router.ServeHTTP(registerResponse, httptest.NewRequest(http.MethodGet, "/register", nil))
+		if registerResponse.Code != http.StatusSeeOther || registerResponse.Header().Get("Location") != "/login?next=%2Fregister" {
+			t.Errorf("anonymous GET /register = %d, Location %q; want redirect to login", registerResponse.Code, registerResponse.Header().Get("Location"))
 		}
 		if response.Header().Get("Content-Security-Policy") == "" {
 			t.Errorf("GET %s missing Content-Security-Policy", requestPath)
