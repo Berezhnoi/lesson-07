@@ -232,6 +232,7 @@ func TestCatalogWebIntegration(t *testing.T) {
 					session = environment.sessions[test.role]
 				}
 				request := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/web/movies/%d", movie.ID), nil)
+				request.Header.Set("Origin", "http://example.com")
 				request.Header.Set("HX-Request", "true")
 				request.AddCookie(session.csrfCookie)
 				if test.role != "" {
@@ -372,6 +373,7 @@ func serveCatalogRequest(router http.Handler, method, path string, body *strings
 	request := httptest.NewRequest(method, path, requestBody)
 	if method == http.MethodPost {
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.Header.Set("Origin", "http://example.com")
 	}
 	for _, cookie := range cookies {
 		request.AddCookie(cookie)

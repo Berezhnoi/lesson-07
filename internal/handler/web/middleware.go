@@ -168,11 +168,10 @@ func changesState(method string) bool {
 }
 
 func validCSRFRequest(c *gin.Context, cookieToken string) bool {
-	if origin := c.GetHeader("Origin"); origin != "" {
-		parsed, err := url.Parse(origin)
-		if err != nil || parsed.Host == "" || !strings.EqualFold(parsed.Host, c.Request.Host) {
-			return false
-		}
+	origin := c.GetHeader("Origin")
+	parsed, err := url.Parse(origin)
+	if origin == "" || err != nil || parsed.Host == "" || !strings.EqualFold(parsed.Host, c.Request.Host) {
+		return false
 	}
 	submitted := c.GetHeader("X-CSRF-Token")
 	if submitted == "" {

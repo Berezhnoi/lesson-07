@@ -127,14 +127,16 @@ func TestWebCSRFRejectsMissingWrongTokenAndMismatchedOrigin(t *testing.T) {
 	router, _, _ := webAuthRouter(t)
 	csrfCookie, csrfToken := getCSRF(t, router, "/login")
 	tests := []struct {
-		name       string
-		formToken  string
-		header     string
-		origin     string
-		wantStatus int
+		name          string
+		formToken     string
+		header        string
+		origin        string
+		missingOrigin bool
+		wantStatus    int
 	}{
 		{name: "missing token", wantStatus: http.StatusForbidden},
 		{name: "wrong token", header: "wrong-token", wantStatus: http.StatusForbidden},
+		{name: "missing origin", header: csrfToken, missingOrigin: true, wantStatus: http.StatusForbidden},
 		{name: "mismatched origin", header: csrfToken, origin: "https://attacker.example", wantStatus: http.StatusForbidden},
 	}
 	for _, test := range tests {
@@ -142,6 +144,9 @@ func TestWebCSRFRejectsMissingWrongTokenAndMismatchedOrigin(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(url.Values{
 				"email": {testWebEmail}, "password": {testWebPassword}, "csrf_token": {test.formToken},
 			}.Encode()))
+			if !test.missingOrigin {
+				request.Header.Set("Origin", "http://example.com")
+			}
 			request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			if test.header != "" {
 				request.Header.Set("X-CSRF-Token", test.header)
@@ -403,6 +408,7 @@ func TestRequestLoggerDoesNotLogCredentialsCookiesOrFormBody(t *testing.T) {
 		"csrf_token": {csrfToken},
 	}.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.Header.Set("Origin", "http://example.com")
 	request.AddCookie(csrfCookie)
 	request.AddCookie(&http.Cookie{Name: "access_token", Value: "cookie-log-marker"})
 	response := httptest.NewRecorder()
@@ -457,6 +463,7 @@ func getCSRF(t *testing.T, router http.Handler, path string) (*http.Cookie, stri
 func submitForm(router http.Handler, path string, values url.Values, cookies ...*http.Cookie) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(values.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.Header.Set("Origin", "http://example.com")
 	for _, cookie := range cookies {
 		request.AddCookie(cookie)
 	}

@@ -93,6 +93,7 @@ func TestHTMXMovieDeleteAuthorizationAndValidation(t *testing.T) {
 	deleteRequest := func(id, accessToken, submittedCSRF string) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(http.MethodDelete, "/web/movies/"+id, nil)
 		request.Header.Set("HX-Request", "true")
+		request.Header.Set("Origin", "http://example.com")
 		if submittedCSRF != "" {
 			request.Header.Set("X-CSRF-Token", submittedCSRF)
 		}
