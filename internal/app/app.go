@@ -23,6 +23,7 @@ import (
 
 type Deps struct {
 	Movies        repository.MovieRepository
+	Catalog       *service.CatalogService
 	Users         repository.UserRepository
 	Tokens        *auth.TokenManager
 	EnableSwagger bool
@@ -70,6 +71,11 @@ func unprotectedDeps(movieRepository repository.MovieRepository, enableSwagger b
 }
 
 func newRouter(deps Deps) http.Handler {
+	if deps.Catalog == nil {
+		if searcher, ok := deps.Movies.(repository.MovieSearcher); ok {
+			deps.Catalog = service.NewCatalogService(searcher)
+		}
+	}
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	// CORS must wrap recovery so panic responses also receive CORS headers.
