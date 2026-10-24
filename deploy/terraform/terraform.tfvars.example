@@ -1,0 +1,3 @@
+# Copy to terraform.tfvars (gitignored) or export TF_VAR_webhook_secret instead.
+# Generate with: openssl rand -base64 48
+webhook_secret = "replace_with_the_same_value_as_the_app_WEBHOOK_SECRET"
