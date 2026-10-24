@@ -10,7 +10,7 @@ NODE_IP = $(shell $(KUBECTL) get node -o jsonpath='{.items[0].status.addresses[?
 AWS := AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 AWS_ENDPOINT_URL=$(FLOCI) aws
 
 .PHONY: all secrets floci-up floci-down lambda-build lambda-test tf-apply tf-destroy image \
-	k8s-secrets k8s-webhook k8s-dns k8s-apply e2e mailbox clean-mailbox
+	k8s-secrets k8s-webhook k8s-dns k8s-apply e2e mailbox clean-mailbox k3s-status k3s-smoke
 
 all: secrets floci-up lambda-build tf-apply image k8s-apply
 
@@ -83,3 +83,14 @@ mailbox:
 
 clean-mailbox:
 	curl -s -X DELETE $(FLOCI)/_aws/ses -o /dev/null -w "%{http_code}\n"
+
+k3s-status: ## Cluster health snapshot (no kubeconfig contents or tokens are printed).
+	@echo "== kubectl get nodes -o wide"; $(KUBECTL) get nodes -o wide
+	@echo; echo "== kubectl get pods -A"; $(KUBECTL) get pods -A
+	@echo; echo "== kubectl get storageclass"; $(KUBECTL) get storageclass
+	@echo; echo "== kubectl get ingressclass"; $(KUBECTL) get ingressclass
+	@echo; echo "== kubectl version"; $(KUBECTL) version
+	@echo; echo "== systemctl status k3s"; systemctl status k3s --no-pager --lines=0 | sed -n '1,8p'
+
+k3s-smoke: ## Deploy, prove and delete the throwaway k3s-smoke namespace.
+	KUBECONFIG=$(HOME)/.kube/config ./k3s-smoke.sh

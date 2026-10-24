@@ -1,0 +1,85 @@
+# Throwaway K3s smoke test (namespace k3s-smoke): Deployment x2 + Service + Traefik Ingress on /smoke,
+# and a local-path PVC. Applied and deleted by `make -C infra k3s-smoke`.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: k3s-smoke
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-conf
+  namespace: k3s-smoke
+data:
+  default.conf: |
+    server {
+      listen 8080;
+      location /smoke { default_type text/plain; return 200 "k3s-smoke ok from $hostname\n"; }
+      location / { return 404; }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: k3s-smoke
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: web }
+  template:
+    metadata:
+      labels: { app: web }
+    spec:
+      containers:
+        - name: nginx
+          image: nginxinc/nginx-unprivileged:1.27-alpine
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet: { path: /smoke, port: 8080 }
+            periodSeconds: 2
+          volumeMounts:
+            - name: conf
+              mountPath: /etc/nginx/conf.d
+      volumes:
+        - name: conf
+          configMap: { name: web-conf }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: k3s-smoke
+spec:
+  selector: { app: web }
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web
+  namespace: k3s-smoke
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /smoke
+            pathType: Prefix
+            backend:
+              service: { name: web, port: { number: 80 } }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data
+  namespace: k3s-smoke
+spec:
+  storageClassName: local-path
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 64Mi

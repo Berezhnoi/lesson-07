@@ -13,7 +13,7 @@ Vagrant.configure("2") do |config|
 
   # Ports reachable from Windows only (127.0.0.1), not from your LAN.
   # SSH 2222 -> 22 is forwarded by Vagrant automatically.
-  config.vm.network "forwarded_port", guest: 30080, host: 8080, host_ip: "127.0.0.1" # Movies NodePort on K3s
+  config.vm.network "forwarded_port", guest: 80,   host: 8080, host_ip: "127.0.0.1" # K3s Traefik ingress
   config.vm.network "forwarded_port", guest: 4566, host: 4566, host_ip: "127.0.0.1" # Floci (AWS emulator)
 
   config.vm.provider "virtualbox" do |vb|
@@ -84,12 +84,19 @@ EOF
     rm -rf aws-sam-cli.zip ./sam-installation
 
     echo "=== K3s ==="
-    # Pinned release; Traefik is disabled because the app is exposed as NodePort 30080.
+    # Pinned stable release; keeps the bundled Traefik ingress and local-path storage class.
     curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="v1.36.5+k3s1" \
-      INSTALL_K3S_EXEC="server --disable traefik --write-kubeconfig-mode 600" sh -
+      INSTALL_K3S_EXEC="server --write-kubeconfig-mode 640 --write-kubeconfig-group vagrant" sh -
     install -d -m 700 -o vagrant -g vagrant /home/vagrant/.kube
     install -m 600 -o vagrant -g vagrant /etc/rancher/k3s/k3s.yaml /home/vagrant/.kube/config
-    echo 'export KUBECONFIG=$HOME/.kube/config' > /etc/profile.d/kubeconfig.sh
+    cat > /etc/profile.d/kubeconfig.sh << 'EOF'
+export KUBECONFIG=$HOME/.kube/config
+if [ -n "$BASH_VERSION" ] && command -v kubectl >/dev/null; then
+  source <(kubectl completion bash)
+  alias k=kubectl
+  complete -o default -F __start_kubectl k
+fi
+EOF
 
     echo "=== Versions ==="
     docker --version

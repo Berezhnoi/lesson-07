@@ -141,6 +141,7 @@ The standard test suite does not require a database. PostgreSQL integration test
 ## Cloud lab (VM + Floci + K3s)
 
 Everything runs inside the VirtualBox VM from `infra/vm/Vagrantfile` (Docker, Go, Terraform, aws cli, K3s).
+Step-by-step from scratch: [`infra/README.md`](./infra/README.md).
 When an admin creates a user in the web UI (`POST /register`), the app sends a signed `user.created`
 webhook to a Go Lambda running on Floci (local AWS emulator, port 4566). The Lambda sends a mock
 confirmation email through Floci's SES. Public API registration does not trigger it.
@@ -152,7 +153,7 @@ make -C infra e2e         # admin creates a user -> email must appear in Floci S
 make -C infra mailbox     # show captured emails (GET /_aws/ses)
 ```
 
-The app is at `http://localhost:30080` in the VM (`http://localhost:8080` on the host).
+The app is at `http://localhost:30080` (NodePort) inside the VM. Host port 8080 forwards to the K3s Traefik ingress on guest port 80; see `docs/k3s-notes.md`.
 
 | Piece | Where | Notes |
 |---|---|---|
