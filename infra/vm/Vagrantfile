@@ -1,6 +1,7 @@
 # infra/vm/Vagrantfile
 # Movies API on K3s + Floci + Terraform: dev VM (Ubuntu 24.04, x86_64)
-# K3s is NOT installed here (Prompt 3). Floci is NOT started here (Prompt 2).
+# Installs Docker, Go, Terraform, aws cli and K3s. Floci and the app are started by
+# `make -C infra all` inside the VM (see README "Cloud lab").
 
 Vagrant.configure("2") do |config|
   config.vm.box = "bento/ubuntu-24.04"
@@ -12,7 +13,7 @@ Vagrant.configure("2") do |config|
 
   # Ports reachable from Windows only (127.0.0.1), not from your LAN.
   # SSH 2222 -> 22 is forwarded by Vagrant automatically.
-  config.vm.network "forwarded_port", guest: 80,   host: 8080, host_ip: "127.0.0.1" # Traefik -> Movies app
+  config.vm.network "forwarded_port", guest: 30080, host: 8080, host_ip: "127.0.0.1" # Movies NodePort on K3s
   config.vm.network "forwarded_port", guest: 4566, host: 4566, host_ip: "127.0.0.1" # Floci (AWS emulator)
 
   config.vm.provider "virtualbox" do |vb|
@@ -82,12 +83,21 @@ EOF
     ./sam-installation/install
     rm -rf aws-sam-cli.zip ./sam-installation
 
+    echo "=== K3s ==="
+    # Pinned release; Traefik is disabled because the app is exposed as NodePort 30080.
+    curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="v1.36.5+k3s1" \
+      INSTALL_K3S_EXEC="server --disable traefik --write-kubeconfig-mode 600" sh -
+    install -d -m 700 -o vagrant -g vagrant /home/vagrant/.kube
+    install -m 600 -o vagrant -g vagrant /etc/rancher/k3s/k3s.yaml /home/vagrant/.kube/config
+    echo 'export KUBECONFIG=$HOME/.kube/config' > /etc/profile.d/kubeconfig.sh
+
     echo "=== Versions ==="
     docker --version
     aws --version
     sam --version
     go version
     terraform version
+    k3s --version | head -1
   SHELL
 
   # ---- 2. Per-user setup (runs as vagrant, so files land in /home/vagrant) ----
