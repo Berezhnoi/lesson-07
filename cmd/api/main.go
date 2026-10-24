@@ -21,6 +21,7 @@ import (
 	"homework/internal/auth"
 	"homework/internal/config"
 	"homework/internal/repository"
+	"homework/internal/webhook"
 )
 
 // @title Movie API
@@ -82,16 +83,26 @@ func run() error {
 		return fmt.Errorf("JWT_SECRET is invalid: %w", err)
 	}
 
+	webhookCfg, err := webhook.ConfigFromEnv()
+	if err != nil {
+		return fmt.Errorf("load webhook configuration: %w", err)
+	}
+	var users repository.UserRepository = repository.NewGormUserRepository(db)
+	if webhookCfg.URL != "" {
+		users = webhook.NewNotifyingUsers(users, webhook.NewClient(webhookCfg), webhookCfg.Timeout)
+		log.Printf("user-created webhook enabled")
+	}
+
 	server := &http.Server{
 		Addr: ":" + strconv.Itoa(cfg.AppPort),
-		Handler: app.NewRouterWithDeps(app.Deps{
+		Handler: webhook.MarkAdminRegistration(app.NewRouterWithDeps(app.Deps{
 			Movies:        repository.NewGormMovieRepository(db),
-			Users:         repository.NewGormUserRepository(db),
+			Users:         users,
 			Tokens:        tokens,
 			EnableSwagger: true,
 			WebUIEnabled:  &cfg.WebUIEnabled,
 			CookieSecure:  cfg.CookieSecure,
-		}),
+		})),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
