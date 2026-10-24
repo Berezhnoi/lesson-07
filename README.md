@@ -137,3 +137,27 @@ make swagger
 
 The standard test suite does not require a database. PostgreSQL integration tests run separately with
 `make test-integration` and use the isolated `_test` database configured in `.env`.
+
+## Cloud lab (VM + Floci + K3s)
+
+Everything runs inside the VirtualBox VM from `infra/vm/Vagrantfile` (Docker, Go, Terraform, aws cli, K3s).
+When an admin creates a user in the web UI (`POST /register`), the app sends a signed `user.created`
+webhook to a Go Lambda running on Floci (local AWS emulator, port 4566). The Lambda sends a mock
+confirmation email through Floci's SES. Public API registration does not trigger it.
+
+```sh
+make -C infra secrets     # generate infra/secrets.env (gitignored, mode 600)
+make -C infra all         # Floci up, build + test Lambda, terraform apply, build image, deploy to K3s
+make -C infra e2e         # admin creates a user -> email must appear in Floci SES
+make -C infra mailbox     # show captured emails (GET /_aws/ses)
+```
+
+The app is at `http://localhost:30080` in the VM (`http://localhost:8080` on the host).
+
+| Piece | Where | Notes |
+|---|---|---|
+| Webhook trigger | `internal/webhook`, wired in `cmd/api/main.go` | Off unless `WEBHOOK_URL` is set; HMAC-SHA256 over `timestamp.body`; async, never changes the response |
+| Lambda | `functions/notifier` (separate Go module) | `provided.al2023`; verifies signature and 5-minute replay window; sends via SES v2 |
+| Terraform | `infra/terraform` | Floci endpoint only, dummy `test` credentials; state and tfvars gitignored |
+| K3s | `infra/k8s` | Postgres, migrate + seed jobs, app on NodePort 30080; secrets come from `infra/secrets.env` |
+| Floci findings | `docs/floci-notes.md` | Cold start, Function URL routing by Host header (CoreDNS workaround), SES quirks |
