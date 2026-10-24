@@ -1,0 +1,11 @@
+.git
+.env
+.env.*
+!.env.example
+.DS_Store
+bin/
+main
+*.log
+*.out
+*.test
+implementation-notes/

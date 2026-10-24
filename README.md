@@ -19,6 +19,24 @@ make run
 The API listens on `http://localhost:8080` by default. Swagger UI is available at
 `http://localhost:8080/swagger/index.html`.
 
+## Run with Docker Compose
+
+The API can also run in a container alongside PostgreSQL. Copy `.env.example` to `.env` and set the
+database, pgAdmin, and JWT secrets before starting the stack. The backend reads its configuration from
+that file and connects to PostgreSQL at the Compose service name `db`.
+
+```sh
+docker compose build backend
+docker compose up -d db
+make migrate-up
+docker compose up -d backend
+```
+
+The backend is available at `http://localhost:${APP_PORT:-8080}` (normally `http://localhost:8080`).
+pgAdmin remains available at `http://localhost:5050`. The existing database and pgAdmin volumes are
+preserved. To start the database, pgAdmin, and backend together after applying migrations, use
+`docker compose up -d db pgadmin backend`.
+
 ## API overview
 
 | Method | Endpoint | Access |

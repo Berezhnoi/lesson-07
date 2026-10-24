@@ -44,6 +44,23 @@ services:
     volumes:
       - ./migrations:/migrations
 
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      APP_PORT: ${APP_PORT:-8080}
+    ports:
+      - "${APP_PORT:-8080}:${APP_PORT:-8080}"
+
 volumes:
   postgres_data:
   pgadmin_data:
