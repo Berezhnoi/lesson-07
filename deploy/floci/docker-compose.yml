@@ -1,0 +1,24 @@
+# Local AWS emulator for the lab. Runs only inside the VM; never points at real AWS.
+name: floci
+services:
+  floci:
+    image: floci/floci:2.2.0
+    user: root
+    ports:
+      - "4566:4566"
+    environment:
+      FLOCI_HOSTNAME: floci
+      FLOCI_DEFAULT_REGION: us-east-1
+    volumes:
+      # Lambda and other Docker-backed services start real containers.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - floci_data:/app/data
+    networks:
+      - floci
+
+networks:
+  floci:
+    name: floci
+
+volumes:
+  floci_data:
