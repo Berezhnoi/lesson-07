@@ -1,6 +1,6 @@
 # Floci notes (local AWS emulator)
 
-Version used: `floci/floci:2.2.0` (released 2026-10-06; pinned in `deploy/floci/docker-compose.yml`).
+Version used: `floci/floci:2.2.0` (released 2026-10-06; pinned in `infra/floci/docker-compose.yml`).
 Sources: <https://github.com/floci-io/floci>, <https://floci.io/floci/services/lambda/>,
 <https://floci.io/floci/services/ses/>, `docs/getting-started/terraform.md` in the Floci repo.
 "Verified" below means checked against the running emulator in the lab VM on 2026-10-24.
@@ -25,7 +25,7 @@ Sources: <https://github.com/floci-io/floci>, <https://floci.io/floci/services/l
   are "reachable directly on `/{proxy:.*}` under the Lambda URL controller", without a hostname format.
   Verified: Floci routes the request by the `Host` header, so `curl -H "Host: <id>.lambda-url.us-east-1.floci" http://localhost:4566/`
   invokes the function, and the request arrives as a Function URL event (lowercased headers, HTTP method set).
-  - **Workaround (smallest):** a K3s CoreDNS custom zone (`deploy/k8s/coredns-custom.yaml.tmpl`) resolves
+  - **Workaround (smallest):** a K3s CoreDNS custom zone (`infra/k8s/coredns-custom.yaml.tmpl`) resolves
     `*.floci` to the node IP, where port 4566 is published. The app uses the Terraform output URL unchanged.
     No app code change is needed.
 - Not implemented in Floci (from the docs): `InvokeWithResponseStream` and layer permissions. Neither is used here.
@@ -36,7 +36,7 @@ Sources: <https://github.com/floci-io/floci>, <https://floci.io/floci/services/l
 
 - v1 and v2 APIs share identities and sent messages. Floci has no sandbox and stores every email locally.
 - Inspect the mailbox: `GET /_aws/ses` (optional `?id=` or `?email=<sender>`). `DELETE /_aws/ses` clears it.
-  Verified (`make -C deploy mailbox`).
+  Verified (`make -C infra mailbox`).
 - **Difference from the docs:** the docs say sends check that the sender is verified. In 2.2.0, a v1 `SendEmail`
   from an unverified address was accepted. Terraform still creates `aws_ses_email_identity`, as AWS requires.
 - No SMTP relay is configured (`FLOCI_SERVICES_SES_SMTP_HOST` unset), so mail is stored only and nothing leaves the VM.
@@ -47,5 +47,5 @@ Sources: <https://github.com/floci-io/floci>, <https://floci.io/floci/services/l
   `skip_requesting_account_id`, and **an endpoint for every service used**. Here that is iam, lambda, ses,
   sesv2 and sts. A service without an endpoint entry would go to real AWS, so `floci_endpoint` is validated
   to be local.
-- State is local (`deploy/terraform/terraform.tfstate`, gitignored). It contains the webhook secret, because
+- State is local (`infra/terraform/terraform.tfstate`, gitignored). It contains the webhook secret, because
   the secret is a Lambda environment variable. Never commit state.

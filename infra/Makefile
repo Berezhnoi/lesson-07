@@ -14,7 +14,7 @@ AWS := AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-e
 
 all: secrets floci-up lambda-build tf-apply image k8s-apply
 
-secrets: ## Generate deploy/secrets.env (gitignored, mode 600) once; values are never printed.
+secrets: ## Generate infra/secrets.env (gitignored, mode 600) once; values are never printed.
 	@if [ -f $(SECRETS) ]; then echo "secrets.env exists"; else \
 	  umask 077; { \
 	    echo "WEBHOOK_SECRET=$$(openssl rand -base64 48 | tr -d '\n/+=')"; \

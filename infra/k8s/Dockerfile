@@ -1,5 +1,5 @@
 # Lab image: API + seed binaries. Copies only source directories, so local
-# secret files (.env, deploy/secrets.env) never enter the build context layers.
+# secret files (.env, infra/secrets.env) never enter the build context layers.
 FROM golang:1.21-alpine AS builder
 
 WORKDIR /src

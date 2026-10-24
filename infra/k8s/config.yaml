@@ -1,5 +1,5 @@
 # Non-secret settings. Secrets (DB_PASSWORD, JWT_SECRET, WEBHOOK_SECRET, ADMIN_PASSWORD)
-# live in the movies-secrets Secret, created by `make -C deploy k8s-secrets` from deploy/secrets.env.
+# live in the movies-secrets Secret, created by `make -C infra k8s-secrets` from infra/secrets.env.
 apiVersion: v1
 kind: ConfigMap
 metadata:

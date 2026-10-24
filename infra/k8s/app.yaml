@@ -24,7 +24,7 @@ spec:
             - containerPort: 8080
           envFrom:
             - configMapRef: { name: movies-config }
-            # WEBHOOK_URL comes from the Terraform output (make -C deploy k8s-webhook).
+            # WEBHOOK_URL comes from the Terraform output (make -C infra k8s-webhook).
             - configMapRef: { name: movies-webhook }
           env:
             - name: DB_PASSWORD
