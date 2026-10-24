@@ -1,0 +1,2 @@
+# Vagrant machine state, including the generated SSH private key. Never commit.
+.vagrant/
