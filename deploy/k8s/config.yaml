@@ -1,0 +1,19 @@
+# Non-secret settings. Secrets (DB_PASSWORD, JWT_SECRET, WEBHOOK_SECRET, ADMIN_PASSWORD)
+# live in the movies-secrets Secret, created by `make -C deploy k8s-secrets` from deploy/secrets.env.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: movies-config
+  namespace: movies
+data:
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_USER: movies
+  DB_NAME: movies
+  DB_SSLMODE: disable
+  APP_PORT: "8080"
+  WEB_UI_ENABLED: "true"
+  COOKIE_SECURE: "false"
+  ADMIN_EMAIL: admin@movies.local
+  # First Lambda invoke pulls the runtime image (~25s cold start on Floci).
+  WEBHOOK_TIMEOUT: 60s

@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: movies-api
+  namespace: movies
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: movies-api
+  template:
+    metadata:
+      labels:
+        app: movies-api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: api
+          image: movies-api:lab
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef: { name: movies-config }
+            # WEBHOOK_URL comes from the Terraform output (make -C deploy k8s-webhook).
+            - configMapRef: { name: movies-webhook }
+          env:
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: movies-secrets, key: DB_PASSWORD } }
+            - name: JWT_SECRET
+              valueFrom: { secretKeyRef: { name: movies-secrets, key: JWT_SECRET } }
+            - name: WEBHOOK_SECRET
+              valueFrom: { secretKeyRef: { name: movies-secrets, key: WEBHOOK_SECRET } }
+          readinessProbe:
+            httpGet: { path: /health, port: 8080 }
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: movies-api
+  namespace: movies
+spec:
+  type: NodePort
+  selector:
+    app: movies-api
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080

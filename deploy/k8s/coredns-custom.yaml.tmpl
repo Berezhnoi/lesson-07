@@ -1,0 +1,15 @@
+# K3s CoreDNS imports *.server keys from this ConfigMap. Floci returns Function URLs
+# on <id>.lambda-url.<region>.floci and routes them by Host header on port 4566;
+# resolve that zone to the node IP, where Floci's port is published.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  floci.server: |
+    floci:53 {
+      template IN A floci {
+        answer "{{ .Name }} 60 IN A ${NODE_IP}"
+      }
+    }
